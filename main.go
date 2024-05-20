@@ -1,7 +1,7 @@
 package main
 
-import "fmt"
+import "kerbecs/config"
 
 func main() {
-	fmt.Println("Hello, World!")
+	config.PrintStartupBanner()
 }
