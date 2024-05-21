@@ -40,7 +40,7 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 		}
 		payload, _ := base64.StdEncoding.DecodeString(auth[1])
 		pair := strings.SplitN(string(payload), ":", 2)
-		if len(pair) != 2 || pair[0] != config.AuthUser || pair[1] != config.AuthPassword {
+		if len(pair) != 2 || pair[0] != config.AdminUser || pair[1] != config.AdminPassword {
 			c.AbortWithStatusJSON(401, gin.H{"message": "Invalid credentials"})
 			return
 		}
