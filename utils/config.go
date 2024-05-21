@@ -14,8 +14,8 @@ func VerifyConfig() {
 		SugarLogger.Debugln("PORT is not set, defaulting to 10311")
 	}
 	if config.AdminPort == "" {
-		config.AdminPort = "103100"
-		SugarLogger.Debugln("ADMIN_PORT is not set, defaulting to 103100")
+		config.AdminPort = "10300"
+		SugarLogger.Debugln("ADMIN_PORT is not set, defaulting to 10300")
 	}
 	if config.AdminUser == "" {
 		config.AdminUser = "admin"
