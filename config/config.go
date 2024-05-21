@@ -10,8 +10,8 @@ var Env = os.Getenv("ENV")
 var Port = os.Getenv("PORT")
 var AdminPort = os.Getenv("ADMIN_PORT")
 
-var AuthUser = os.Getenv("AUTH_USER")
-var AuthPassword = os.Getenv("AUTH_PASSWORD")
+var AdminUser = os.Getenv("ADMIN_USER")
+var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 
 var RinconClient *rincon.Client
 var RinconUser = os.Getenv("RINCON_USER")
