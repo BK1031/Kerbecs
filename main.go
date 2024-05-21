@@ -21,17 +21,18 @@ func main() {
 
 	adminRouter := controller.SetupRouter()
 	controller.InitializeAdminRoutes(adminRouter)
-	err := adminRouter.Run(":" + config.AdminPort)
-	if err != nil {
-		utils.SugarLogger.Fatalf("Failed to start admin gateway: %v", err)
-	}
+	go func() {
+		err := adminRouter.Run(":" + config.AdminPort)
+		if err != nil {
+			utils.SugarLogger.Fatalf("Failed to start admin gateway: %v", err)
+		}
+	}()
 
 	// initialize a reverse proxy and pass the actual backend server url here
-	proxy, err := NewProxy("http://my-api-server.com")
+	proxy, err := NewProxy("http://localhost:7001")
 	if err != nil {
 		panic(err)
 	}
-
 	// handle all requests to your server using the proxy
 	http.HandleFunc("/", ProxyRequestHandler(proxy))
 	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
