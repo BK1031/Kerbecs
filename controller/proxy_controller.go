@@ -10,6 +10,8 @@ import (
 	"kerbecs/config"
 	"kerbecs/model"
 	"kerbecs/utils"
+	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -86,8 +88,22 @@ func ProxyHandler(c *gin.Context) {
 		})
 		return
 	}
-	println(service.Name)
-	c.JSON(200, gin.H{"message": "Proxying request"})
+	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
+	endpoint, err := url.Parse(service.Endpoint)
+	if err != nil {
+		c.JSON(500, model.Response{
+			Status:    "ERROR",
+			Ping:      strconv.FormatInt(time.Now().Sub(startTime.(time.Time)).Milliseconds(), 10) + "ms",
+			Gateway:   "kerbecs v" + config.Version,
+			Service:   config.RinconClient.Rincon().Name + " v" + config.RinconClient.Rincon().Version,
+			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
+			Data:      json.RawMessage("{\"message\": \"Failed to parse service endpoint: " + service.Endpoint + "\"}"),
+		})
+		return
+
+	}
+	proxy := httputil.NewSingleHostReverseProxy(endpoint)
+	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
 func ProxyResponseLogger() gin.HandlerFunc {
