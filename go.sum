@@ -1,3 +1,5 @@
+github.com/bk1031/rincon-go v1.0.0 h1:3TfgQfWTYFGNyze/lb310VjgkUercIvKeqG6cJCN8Lk=
+github.com/bk1031/rincon-go v1.0.0/go.mod h1:4NWMwrBsQH58vTrcD2Wkw54iMkdCAKKl84W47AiGrbc=
 github.com/fatih/color v1.17.0 h1:GlRw1BRJxkpqUCBKzKOw098ed57fEsKeNjpTe3cSjK4=
 github.com/fatih/color v1.17.0/go.mod h1:YZ7TlrGPkiz6ku9fK3TLD/pl3CpsiFyu8N92HLgmosI=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
