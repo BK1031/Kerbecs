@@ -8,6 +8,7 @@ require (
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/sync v0.7.0
 )
 
 require (

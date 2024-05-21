@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-func StartAdminServer() error {
-	adminRouter := SetupAdminRouter()
-	InitializeAdminRoutes(adminRouter)
-	return adminRouter.Run(":" + config.AdminPort)
+func StartProxyServer() error {
+	proxyRouter := SetupProxyRouter()
+	InitializeProxyRoutes(proxyRouter)
+	return proxyRouter.Run(":" + config.Port)
 }
 
-func SetupAdminRouter() *gin.Engine {
+func SetupProxyRouter() *gin.Engine {
 	if config.Env == "PROD" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -27,16 +27,15 @@ func SetupAdminRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 		AllowCredentials: true,
 	}))
-	r.Use(AdminAuthMiddleware())
+	r.Use(ProxyAuthMiddleware())
 	return r
 }
 
-func InitializeAdminRoutes(router *gin.Engine) {
-	gw := router.Group("/admin-gw", func(c *gin.Context) {})
-	gw.GET("/ping", Ping)
+func InitializeProxyRoutes(router *gin.Engine) {
+	router.Any("/*path", ProxyHandler)
 }
 
-func AdminAuthMiddleware() gin.HandlerFunc {
+func ProxyAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.FullPath() != "/admin-gw/ping" {
 			auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
@@ -53,4 +52,8 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func ProxyHandler(c *gin.Context) {
+	c.JSON(200, gin.H{"message": "Proxying request"})
 }
