@@ -23,7 +23,7 @@ func RegisterRincon() {
 		Name:        "kerbecs",
 		Version:     config.Version,
 		Endpoint:    "http://localhost:" + config.AdminPort,
-		HealthCheck: "http://localhost:" + config.AdminPort + "/ping",
+		HealthCheck: "http://localhost:" + config.AdminPort + "/admin-gw/ping",
 	}, []string{"/admin-gw/**"})
 	if err != nil {
 		utils.SugarLogger.Errorf("Failed to register service with Rincon: %v", err)
