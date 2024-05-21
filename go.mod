@@ -2,6 +2,10 @@ module kerbecs
 
 go 1.22
 
+replace (
+	github.com/bk1031/rincon-go => ../rincon-go
+)
+
 require (
 	github.com/bk1031/rincon-go v1.0.0
 	github.com/fatih/color v1.17.0

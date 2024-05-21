@@ -79,8 +79,8 @@ func ProxyHandler(c *gin.Context) {
 		c.JSON(404, model.Response{
 			Status:    "ERROR",
 			Ping:      strconv.FormatInt(time.Now().Sub(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   "Kerbecs v" + config.Version,
-			Service:   "Rincon",
+			Gateway:   "kerbecs v" + config.Version,
+			Service:   config.RinconClient.Rincon().Name + " v" + config.RinconClient.Rincon().Version,
 			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
 			Data:      json.RawMessage("{\"message\": \"No service to handle route: " + c.Request.URL.String() + "\"}"),
 		})
