@@ -91,8 +91,7 @@ func ProxyHandler(c *gin.Context) {
 		return
 	}
 	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
-	//endpoint, err := url.Parse(service.Endpoint)
-	endpoint, err := url.Parse("http://localhost:7001")
+	endpoint, err := url.Parse(service.Endpoint)
 	if err != nil {
 		c.JSON(500, model.Response{
 			Status:    "ERROR",
