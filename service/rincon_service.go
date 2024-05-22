@@ -19,15 +19,17 @@ func RegisterRincon() {
 		return
 	}
 	config.RinconClient = client
-	id, err := config.RinconClient.Register(rincon.Service{
-		Name:        "kerbecs",
+	config.Service = rincon.Service{
+		Name:        "Kerbecs",
 		Version:     config.Version,
 		Endpoint:    "http://localhost:" + config.AdminPort,
 		HealthCheck: "http://host.docker.internal:" + config.AdminPort + "/admin-gw/ping",
-	}, []string{"/admin-gw/**"})
+	}
+	id, err := config.RinconClient.Register(config.Service, []string{"/admin-gw/**"})
 	if err != nil {
 		utils.SugarLogger.Errorf("Failed to register service with Rincon: %v", err)
 		return
 	}
+	config.Service = *config.RinconClient.Service()
 	utils.SugarLogger.Infof("Registered service with ID: %d", id)
 }

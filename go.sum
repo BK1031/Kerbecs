@@ -2,6 +2,10 @@ github.com/bk1031/rincon-go v1.0.0 h1:3TfgQfWTYFGNyze/lb310VjgkUercIvKeqG6cJCN8L
 github.com/bk1031/rincon-go v1.0.0/go.mod h1:4NWMwrBsQH58vTrcD2Wkw54iMkdCAKKl84W47AiGrbc=
 github.com/bk1031/rincon-go v1.1.0 h1:iq8NezKD4NKYyMjB26DZGYyUgqzA8z1qJDXd9I0/wlA=
 github.com/bk1031/rincon-go v1.1.0/go.mod h1:4NWMwrBsQH58vTrcD2Wkw54iMkdCAKKl84W47AiGrbc=
+github.com/bk1031/rincon-go v1.1.1 h1:p/uhHIPYNov6KTS0/CiJFh1MlDGUECjHAZDB/9fX4Qg=
+github.com/bk1031/rincon-go v1.1.1/go.mod h1:uDqK3SL70tpFoU4EskA14ugbtFMcR5MN1O9XCrsF0R4=
+github.com/bk1031/rincon-go v1.1.2 h1:P7gm+SEGeEz/tAXXSq/QGZcsb9tLW+wTqJR0+zz0fKE=
+github.com/bk1031/rincon-go v1.1.2/go.mod h1:4NWMwrBsQH58vTrcD2Wkw54iMkdCAKKl84W47AiGrbc=
 github.com/bytedance/sonic v1.11.6 h1:oUp34TzMlL+OY1OUWxHqsdkgC/Zfc85zGqw9siXjrc0=
 github.com/bytedance/sonic v1.11.6/go.mod h1:LysEHSvpvDySVdC2f87zGWf6CIKJcAvqab1ZaiQtds4=
 github.com/bytedance/sonic/loader v0.1.1 h1:c+e5Pt1k/cy5wMveRDyk2X4B9hF4g7an8N3zCYjJFNM=
