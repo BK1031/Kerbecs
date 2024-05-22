@@ -92,7 +92,7 @@ func ProxyHandler(c *gin.Context) {
 	}
 	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
 	//endpoint, err := url.Parse(service.Endpoint)
-	endpoint, err := url.Parse("http://localhost:10311")
+	endpoint, err := url.Parse("http://localhost:7001")
 	if err != nil {
 		c.JSON(500, model.Response{
 			Status:    "ERROR",
@@ -129,6 +129,8 @@ func ProxyHandler(c *gin.Context) {
 			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
 		}
 		respModel.Data = json.RawMessage("{\"message\": \"Failed to reach " + service.Name + ": " + err.Error() + "\"}")
+		b, _ := json.Marshal(respModel)
+		writer.Write(b)
 	}
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
