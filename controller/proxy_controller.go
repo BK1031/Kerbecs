@@ -2,10 +2,10 @@ package controller
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/bk1031/rincon-go"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"io"
 	"kerbecs/config"

@@ -1,6 +1,6 @@
 package model
 
-import "github.com/goccy/go-json"
+import "encoding/json"
 
 type Response struct {
 	Status    string          `json:"status"`
