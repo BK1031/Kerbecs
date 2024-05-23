@@ -7,7 +7,7 @@ import (
 )
 
 func RegisterRincon() {
-	rinconEndpoint := "http://rincon:" + config.Port
+	rinconEndpoint := "http://rincon:10311"
 	client, err := rincon.NewClient(rincon.Config{
 		BaseURL:           rinconEndpoint,
 		HeartbeatMode:     rincon.ServerHeartbeat,
@@ -17,7 +17,7 @@ func RegisterRincon() {
 	})
 	if err != nil {
 		utils.SugarLogger.Errorf("Failed to create Rincon client with %s: %v", rinconEndpoint, err)
-		rinconEndpoint = "http://host.docker.internal:" + config.Port
+		rinconEndpoint = "http://host.docker.internal:10311"
 		client, err = rincon.NewClient(rincon.Config{
 			BaseURL:           rinconEndpoint,
 			HeartbeatMode:     rincon.ServerHeartbeat,
@@ -27,7 +27,7 @@ func RegisterRincon() {
 		})
 		if err != nil {
 			utils.SugarLogger.Errorf("Failed to create Rincon client with %s: %v", rinconEndpoint, err)
-			rinconEndpoint = "http://localhost:" + config.Port
+			rinconEndpoint = "http://localhost:10311"
 			client, err = rincon.NewClient(rincon.Config{
 				BaseURL:           rinconEndpoint,
 				HeartbeatMode:     rincon.ServerHeartbeat,
