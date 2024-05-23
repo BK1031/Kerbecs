@@ -4,6 +4,7 @@ import (
 	"github.com/bk1031/rincon-go"
 	"kerbecs/config"
 	"kerbecs/utils"
+	"time"
 )
 
 var rinconRetries = 0
@@ -41,6 +42,7 @@ func RegisterRincon() {
 				if rinconRetries < 5 {
 					utils.SugarLogger.Errorf("Failed to create Rincon client with %s: %v, retrying in 5s...", rinconEndpoint, err)
 					rinconRetries++
+					time.Sleep(time.Second * 5)
 					RegisterRincon()
 				} else {
 					utils.SugarLogger.Fatalln("Failed to create Rincon client after 5 attempts")
