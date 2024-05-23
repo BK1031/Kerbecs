@@ -6,6 +6,8 @@ import (
 	"kerbecs/utils"
 )
 
+var rinconRetries = 0
+
 func RegisterRincon() {
 	rinconEndpoint := "http://rincon:10311"
 	client, err := rincon.NewClient(rincon.Config{
@@ -36,8 +38,14 @@ func RegisterRincon() {
 				AuthPassword:      config.RinconPassword,
 			})
 			if err != nil {
-				utils.SugarLogger.Errorf("Failed to create Rincon client with %s: %v", rinconEndpoint, err)
-				return
+				if rinconRetries < 5 {
+					utils.SugarLogger.Errorf("Failed to create Rincon client with %s: %v, retrying in 5s...", rinconEndpoint, err)
+					rinconRetries++
+					RegisterRincon()
+				} else {
+					utils.SugarLogger.Fatalln("Failed to create Rincon client after 5 attempts")
+					return
+				}
 			} else {
 				utils.SugarLogger.Infof("Created Rincon client with endpoint %s", rinconEndpoint)
 				utils.SugarLogger.Infof("Service is running on Host, Rincon running on Host!")

@@ -7,7 +7,7 @@ import (
 
 var Service rincon.Service
 
-var Version = "1.0.2"
+var Version = "1.0.3"
 var Env = os.Getenv("ENV")
 var Port = os.Getenv("PORT")
 var AdminPort = os.Getenv("ADMIN_PORT")
