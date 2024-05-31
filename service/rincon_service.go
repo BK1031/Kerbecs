@@ -68,7 +68,7 @@ func RegisterRincon() {
 	config.RinconClient = client
 	if isRunningInDocker {
 		config.Service.Endpoint = "http://kerbecs:" + config.AdminPort
-		config.Service.HealthCheck = "http://kerbecs:" + config.AdminPort + "/ping"
+		config.Service.HealthCheck = "http://kerbecs:" + config.AdminPort + "/admin-gw/ping"
 	} else {
 		config.Service.Endpoint = "http://host.docker.internal:" + config.AdminPort
 		config.Service.HealthCheck = "http://host.docker.internal:" + config.AdminPort + "/admin-gw/ping"
