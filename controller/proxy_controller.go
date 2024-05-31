@@ -3,10 +3,6 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/bk1031/rincon-go"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"io"
 	"kerbecs/config"
 	"kerbecs/model"
@@ -15,7 +11,13 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/bk1031/rincon-go"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func StartProxyServer() error {
@@ -78,6 +80,10 @@ func ProxyHandler(c *gin.Context) {
 	//requestID := c.GetHeader("Request-ID")
 	startTime, _ := c.Get("Request-Start-Time")
 	println(c.Request.URL.Path)
+	if strings.HasPrefix(c.Request.URL.Path, "/ws/") {
+		WebsocketProxyHandler(c)
+		return
+	}
 	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path)
 	if err != nil {
 		c.JSON(404, model.Response{
@@ -130,6 +136,44 @@ func ProxyHandler(c *gin.Context) {
 		respModel.Data = json.RawMessage("{\"message\": \"Failed to reach " + service.Name + ": " + err.Error() + "\"}")
 		b, _ := json.Marshal(respModel)
 		writer.Write(b)
+	}
+	proxy.ServeHTTP(c.Writer, c.Request)
+}
+
+func WebsocketProxyHandler(c *gin.Context) {
+	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path)
+	if err != nil {
+		c.JSON(404, model.Response{
+			Status:    "ERROR",
+			Gateway:   config.Service.FormattedNameWithVersion(),
+			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
+			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
+			Data:      json.RawMessage("{\"message\": \"No service to handle route: " + c.Request.URL.String() + "\"}"),
+		})
+		return
+	}
+	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
+	endpoint, err := url.Parse(service.Endpoint)
+	if err != nil {
+		c.JSON(500, model.Response{
+			Status:    "ERROR",
+			Gateway:   config.Service.FormattedNameWithVersion(),
+			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
+			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
+			Data:      json.RawMessage("{\"message\": \"Failed to parse service endpoint: " + service.Endpoint + "\"}"),
+		})
+		return
+	}
+	proxy := httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = endpoint.Scheme
+			req.URL.Host = endpoint.Host
+			req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
+			req.Host = endpoint.Host
+		},
+	}
+	proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, err error) {
+		utils.SugarLogger.Errorln("Failed to proxy request: " + err.Error())
 	}
 	proxy.ServeHTTP(c.Writer, c.Request)
 }

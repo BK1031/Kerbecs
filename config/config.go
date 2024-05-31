@@ -1,13 +1,20 @@
 package config
 
 import (
-	"github.com/bk1031/rincon-go"
 	"os"
+
+	"github.com/bk1031/rincon-go"
 )
 
-var Service rincon.Service
+var Service rincon.Service = rincon.Service{
+	Name:    "Kerbecs",
+	Version: "1.1.0",
+}
 
-var Version = "1.0.4"
+var Routes = []string{
+	"/admin-gw/**",
+}
+
 var Env = os.Getenv("ENV")
 var Port = os.Getenv("PORT")
 var AdminPort = os.Getenv("ADMIN_PORT")
