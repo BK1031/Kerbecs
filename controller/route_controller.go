@@ -2,11 +2,12 @@ package controller
 
 import (
 	"encoding/base64"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"kerbecs/config"
 	"strings"
 	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 )
 
 func StartAdminServer() error {

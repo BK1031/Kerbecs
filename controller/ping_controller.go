@@ -1,12 +1,13 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
 	"kerbecs/config"
+
+	"github.com/gin-gonic/gin"
 )
 
 func Ping(c *gin.Context) {
 	c.JSON(200, gin.H{
-		"message": "Kerbecs v" + config.Version + " is online!",
+		"message": "Kerbecs v" + config.Service.Version + " is online!",
 	})
 }
