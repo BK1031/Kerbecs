@@ -3,7 +3,7 @@ package config
 import (
 	"os"
 
-	"github.com/bk1031/rincon-go"
+	"github.com/bk1031/rincon-go/v2"
 )
 
 var Service rincon.Service = rincon.Service{
@@ -11,8 +11,11 @@ var Service rincon.Service = rincon.Service{
 	Version: "1.2.0",
 }
 
-var Routes = []string{
-	"/admin-gw/**",
+var Routes = []rincon.Route{
+	{
+		Route:  "/admin-gw/**",
+		Method: "*",
+	},
 }
 
 var Env = os.Getenv("ENV")

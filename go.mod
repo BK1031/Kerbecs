@@ -3,7 +3,8 @@ module kerbecs
 go 1.22
 
 require (
-	github.com/bk1031/rincon-go v1.1.2
+	github.com/bk1031/rincon-go v1.1.5
+	github.com/bk1031/rincon-go/v2 v2.0.0
 	github.com/fatih/color v1.17.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0

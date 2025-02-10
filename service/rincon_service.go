@@ -5,7 +5,7 @@ import (
 	"kerbecs/utils"
 	"time"
 
-	"github.com/bk1031/rincon-go"
+	"github.com/bk1031/rincon-go/v2"
 )
 
 var rinconRetries = 0
