@@ -1,11 +1,12 @@
 package main
 
 import (
-	"golang.org/x/sync/errgroup"
 	"kerbecs/config"
 	"kerbecs/controller"
 	"kerbecs/service"
 	"kerbecs/utils"
+
+	"golang.org/x/sync/errgroup"
 )
 
 var eg errgroup.Group

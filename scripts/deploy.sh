@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Check if version is provided
-if [ -z "$1" ]
+# Extract version from config.go
+VERSION=$(grep 'var Version =' config/config.go | cut -d '"' -f 2)
+
+if [ -z "$VERSION" ]
   then
-    echo "No version number provided"
+    echo "Error: Unable to extract version from config/config.go"
     exit 1
 fi
 
@@ -13,6 +15,25 @@ if ! [ -x "$(command -v docker)" ]; then
   exit 1
 fi
 
-echo "Building container for Kerbecs v$1"
+echo "Building container for Kerbecs v$VERSION"
+
 # Build the docker container
-docker build -t bk1031/kerbecs:"$1" -t bk1031/kerbecs:latest --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push --progress=plain .
+docker build -t bk1031/kerbecs:"$VERSION" -t bk1031/kerbecs:latest --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push --progress=plain .
+
+echo "Container deployed successfully"
+
+# Check if GitHub CLI is installed
+if ! command -v gh &> /dev/null
+then
+    echo "GitHub CLI (gh) is not installed. Please install it to proceed."
+    exit 1
+fi
+
+# Create a release tag
+git tag -s v$VERSION -m "Release version $VERSION"
+git push origin v$VERSION
+
+# Create a release
+gh release create v$VERSION --generate-notes
+
+echo "Package released successfully for version $VERSION"
