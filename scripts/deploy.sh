@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Extract version from config.go
-VERSION=$(grep 'var Version =' config/config.go | cut -d '"' -f 2)
+VERSION=$(grep 'Version: ' config/config.go | cut -d '"' -f 2)
 
 if [ -z "$VERSION" ]
   then
