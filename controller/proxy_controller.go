@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bk1031/rincon-go"
+	"github.com/bk1031/rincon-go/v2"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -80,15 +80,16 @@ func ProxyHandler(c *gin.Context) {
 	//requestID := c.GetHeader("Request-ID")
 	startTime, _ := c.Get("Request-Start-Time")
 	println(c.Request.URL.Path)
+	// TODO: fix websocket workaround
 	if strings.HasPrefix(c.Request.URL.Path, "/ws/") {
 		WebsocketProxyHandler(c)
 		return
 	}
-	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path)
+	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path, c.Request.Method)
 	if err != nil {
 		c.JSON(404, model.Response{
 			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Now().Sub(startTime.(time.Time)).Milliseconds(), 10) + "ms",
+			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
 			Gateway:   config.Service.FormattedNameWithVersion(),
 			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
 			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
@@ -101,7 +102,7 @@ func ProxyHandler(c *gin.Context) {
 	if err != nil {
 		c.JSON(500, model.Response{
 			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Now().Sub(startTime.(time.Time)).Milliseconds(), 10) + "ms",
+			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
 			Gateway:   config.Service.FormattedNameWithVersion(),
 			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
 			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
@@ -116,7 +117,7 @@ func ProxyHandler(c *gin.Context) {
 			return err
 		}
 		respModel.Timestamp = time.Now().Format("Mon Jan 02 15:04:05 MST 2006")
-		respModel.Ping = strconv.FormatInt(time.Now().Sub(startTime.(time.Time)).Milliseconds(), 10) + "ms"
+		respModel.Ping = strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms"
 		b, _ := json.Marshal(respModel)
 		response.Body = io.NopCloser(bytes.NewReader(b))
 		response.ContentLength = int64(len(b))
@@ -128,7 +129,7 @@ func ProxyHandler(c *gin.Context) {
 		writer.WriteHeader(502)
 		respModel := model.Response{
 			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Now().Sub(startTime.(time.Time)).Milliseconds(), 10) + "ms",
+			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
 			Gateway:   config.Service.FormattedNameWithVersion(),
 			Service:   service.FormattedNameWithVersion(),
 			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
@@ -141,7 +142,7 @@ func ProxyHandler(c *gin.Context) {
 }
 
 func WebsocketProxyHandler(c *gin.Context) {
-	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path)
+	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path, c.Request.Method)
 	if err != nil {
 		c.JSON(404, model.Response{
 			Status:    "ERROR",
