@@ -1,6 +1,7 @@
 # Kerbecs
 
-<img align="right" width="159px" src="https://github.com/BK1031/Kerbecs/blob/main/assets/kerbecs.png?raw=true" alt="kerbecs-logo">
+<!-- <img align="right" width="159px" src="https://github.com/BK1031/Kerbecs/blob/main/assets/kerbecs.png?raw=true" alt="kerbecs-logo"> -->
+<img align="right" width="159px" src="assets/kerbecs.png" alt="kerbecs-logo">
 
 [![Build Status](https://github.com/BK1031/Kerbecs/actions/workflows/test.yml/badge.svg)](https://github.com/BK1031/Kerbecs/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/BK1031/Kerbecs/graph/badge.svg?token=R4NMABYGOZ)](https://codecov.io/gh/BK1031/Kerbecs)
