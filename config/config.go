@@ -22,9 +22,12 @@ var Env = os.Getenv("ENV")
 var Port = os.Getenv("PORT")
 var AdminPort = os.Getenv("ADMIN_PORT")
 
-var AdminUser = os.Getenv("ADMIN_USER")
-var AdminPassword = os.Getenv("ADMIN_PASSWORD")
+var KerbecsUser = os.Getenv("KERBECS_USER")
+var KerbecsPassword = os.Getenv("KERBECS_PASSWORD")
+var KerbecsEndpoint = os.Getenv("KERBECS_ENDPOINT")
+var KerbecsHealthCheck = os.Getenv("KERBECS_HEALTH_CHECK")
 
 var RinconClient *rincon.Client
 var RinconUser = os.Getenv("RINCON_USER")
 var RinconPassword = os.Getenv("RINCON_PASSWORD")
+var RinconEndpoint = os.Getenv("RINCON_ENDPOINT")
