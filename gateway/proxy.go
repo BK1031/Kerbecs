@@ -1,4 +1,4 @@
-package controller
+package gateway
 
 import (
 	"bytes"
@@ -14,39 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bk1031/rincon-go/v2"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
-
-func StartProxyServer() error {
-	proxyRouter := SetupProxyRouter()
-	InitializeProxyRoutes(proxyRouter)
-	return proxyRouter.Run(":" + config.Port)
-}
-
-func SetupProxyRouter() *gin.Engine {
-	if config.Env == "PROD" {
-		gin.SetMode(gin.ReleaseMode)
-	}
-	r := gin.Default()
-	r.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
-		MaxAge:           12 * time.Hour,
-		AllowCredentials: true,
-	}))
-	r.Use(ProxyRequestLogger())
-	r.Use(ProxyAuthMiddleware())
-	r.Use(ProxyResponseLogger())
-	return r
-}
-
-func InitializeProxyRoutes(router *gin.Engine) {
-	router.Any("/*path", ProxyHandler)
-}
 
 func ProxyRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -66,6 +36,9 @@ func ProxyRequestLogger() gin.HandlerFunc {
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		utils.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
 		c.Request.Header.Set("Request-ID", requestID.String())
+		if strings.ToLower(c.GetHeader("Upgrade")) != "" {
+			utils.SugarLogger.Infoln("UPGRADE: " + c.GetHeader("Upgrade"))
+		}
 		c.Next()
 	}
 }
@@ -76,15 +49,25 @@ func ProxyAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-func ProxyHandler(c *gin.Context) {
-	//requestID := c.GetHeader("Request-ID")
-	startTime, _ := c.Get("Request-Start-Time")
-	println(c.Request.URL.Path)
-	// TODO: fix websocket workaround
-	if strings.HasPrefix(c.Request.URL.Path, "/ws/") {
-		WebsocketProxyHandler(c)
-		return
+func ProxyResponseLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		startTime, _ := c.Get("Request-Start-Time")
+		c.Next()
+		duration := time.Since(startTime.(time.Time)).Milliseconds()
+
+		status := c.Writer.Status()
+		isWebSocket := strings.ToLower(c.GetHeader("Upgrade")) == "websocket"
+
+		if isWebSocket {
+			utils.SugarLogger.Infof("WS STATUS: %d – took %dms", status, duration)
+		} else {
+			utils.SugarLogger.Infof("RESPONSE STATUS: %d – took %dms", status, duration)
+		}
 	}
+}
+
+func ProxyHandler(c *gin.Context) {
+	startTime, _ := c.Get("Request-Start-Time")
 	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path, c.Request.Method)
 	if err != nil {
 		c.JSON(404, model.Response{
@@ -110,8 +93,12 @@ func ProxyHandler(c *gin.Context) {
 		})
 		return
 	}
+
 	proxy := httputil.NewSingleHostReverseProxy(endpoint)
 	proxy.ModifyResponse = func(response *http.Response) error {
+		if response.StatusCode == http.StatusSwitchingProtocols {
+			return nil // it's a WebSocket upgrade, leave it untouched!
+		}
 		respModel, err := BuildResponseStruct(response, *service)
 		if err != nil {
 			return err
@@ -126,7 +113,7 @@ func ProxyHandler(c *gin.Context) {
 	}
 	proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, err error) {
 		utils.SugarLogger.Errorln("Failed to proxy request: " + err.Error())
-		writer.WriteHeader(502)
+		writer.WriteHeader(http.StatusBadGateway)
 		respModel := model.Response{
 			Status:    "ERROR",
 			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
@@ -139,76 +126,4 @@ func ProxyHandler(c *gin.Context) {
 		writer.Write(b)
 	}
 	proxy.ServeHTTP(c.Writer, c.Request)
-}
-
-func WebsocketProxyHandler(c *gin.Context) {
-	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path, c.Request.Method)
-	if err != nil {
-		c.JSON(404, model.Response{
-			Status:    "ERROR",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-			Data:      json.RawMessage("{\"message\": \"No service to handle route: " + c.Request.URL.String() + "\"}"),
-		})
-		return
-	}
-	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
-	endpoint, err := url.Parse(service.Endpoint)
-	if err != nil {
-		c.JSON(500, model.Response{
-			Status:    "ERROR",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-			Data:      json.RawMessage("{\"message\": \"Failed to parse service endpoint: " + service.Endpoint + "\"}"),
-		})
-		return
-	}
-	proxy := httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = endpoint.Scheme
-			req.URL.Host = endpoint.Host
-			req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-			req.Host = endpoint.Host
-		},
-	}
-	proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, err error) {
-		utils.SugarLogger.Errorln("Failed to proxy request: " + err.Error())
-	}
-	proxy.ServeHTTP(c.Writer, c.Request)
-}
-
-func ProxyResponseLogger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-		utils.SugarLogger.Infoln("RESPONSE STATUS: " + strconv.Itoa(c.Writer.Status()))
-	}
-}
-
-func BuildResponseStruct(response *http.Response, proxiedService rincon.Service) (model.Response, error) {
-	respModel := model.Response{
-		Gateway: config.Service.FormattedNameWithVersion(),
-		Service: proxiedService.FormattedNameWithVersion(),
-	}
-	bodyBytes, err := io.ReadAll(response.Body)
-	if err != nil {
-		utils.SugarLogger.Errorln("Failed to read response body: " + err.Error())
-		return respModel, err
-	}
-	err = json.Unmarshal(bodyBytes, &respModel.Data)
-	if err != nil {
-		utils.SugarLogger.Errorln("Failed to unmarshall response body, returning as message string: " + err.Error())
-		respModel.Data = json.RawMessage("{\"message\": \"" + string(bodyBytes) + "\"}")
-	}
-	if response.StatusCode < 200 {
-		respModel.Status = "INFO"
-	} else if response.StatusCode < 300 {
-		respModel.Status = "SUCCESS"
-	} else if response.StatusCode < 400 {
-		respModel.Status = "REDIRECT"
-	} else {
-		respModel.Status = "ERROR"
-	}
-	return respModel, nil
 }

@@ -1,4 +1,4 @@
-package controller
+package admin
 
 import (
 	"encoding/base64"
@@ -10,13 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func StartAdminServer() error {
-	adminRouter := SetupAdminRouter()
-	InitializeAdminRoutes(adminRouter)
-	return adminRouter.Run(":" + config.AdminPort)
+func StartServer() error {
+	router := SetupRouter()
+	InitializeRoutes(router)
+	return router.Run(":" + config.AdminPort)
 }
 
-func SetupAdminRouter() *gin.Engine {
+func SetupRouter() *gin.Engine {
 	if config.Env == "PROD" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -28,16 +28,16 @@ func SetupAdminRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 		AllowCredentials: true,
 	}))
-	r.Use(AdminAuthMiddleware())
+	r.Use(AuthMiddleware())
 	return r
 }
 
-func InitializeAdminRoutes(router *gin.Engine) {
+func InitializeRoutes(router *gin.Engine) {
 	gw := router.Group("/admin-gw", func(c *gin.Context) {})
 	gw.GET("/ping", Ping)
 }
 
-func AdminAuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.FullPath() != "/admin-gw/ping" {
 			auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
@@ -47,7 +47,7 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 			}
 			payload, _ := base64.StdEncoding.DecodeString(auth[1])
 			pair := strings.SplitN(string(payload), ":", 2)
-			if len(pair) != 2 || pair[0] != config.AdminUser || pair[1] != config.AdminPassword {
+			if len(pair) != 2 || pair[0] != config.KerbecsUser || pair[1] != config.KerbecsPassword {
 				c.AbortWithStatusJSON(401, gin.H{"message": "Invalid credentials"})
 				return
 			}

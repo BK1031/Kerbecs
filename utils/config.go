@@ -17,12 +17,12 @@ func VerifyConfig() {
 		config.AdminPort = "10300"
 		SugarLogger.Debugln("ADMIN_PORT is not set, defaulting to 10300")
 	}
-	if config.AdminUser == "" {
-		config.AdminUser = "admin"
-		SugarLogger.Debugln("ADMIN_USER is not set, defaulting to admin")
+	if config.KerbecsUser == "" {
+		config.KerbecsUser = "admin"
+		SugarLogger.Debugln("KERBECS_USER is not set, defaulting to admin")
 	}
-	if config.AdminPassword == "" {
-		config.AdminPassword = "admin"
-		SugarLogger.Debugln("ADMIN_PASSWORD is not set, defaulting to admin")
+	if config.KerbecsPassword == "" {
+		config.KerbecsPassword = "admin"
+		SugarLogger.Debugln("KERBECS_PASSWORD is not set, defaulting to admin")
 	}
 }

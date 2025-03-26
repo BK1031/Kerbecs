@@ -1,8 +1,9 @@
 package main
 
 import (
+	"kerbecs/admin"
 	"kerbecs/config"
-	"kerbecs/controller"
+	"kerbecs/gateway"
 	"kerbecs/service"
 	"kerbecs/utils"
 
@@ -19,10 +20,10 @@ func main() {
 	utils.VerifyConfig()
 	service.RegisterRincon()
 	eg.Go(func() error {
-		return controller.StartAdminServer()
+		return admin.StartServer()
 	})
 	eg.Go(func() error {
-		return controller.StartProxyServer()
+		return gateway.StartServer()
 	})
 	if err := eg.Wait(); err != nil {
 		utils.SugarLogger.Fatalf("Failed to start servers: %v", err)
