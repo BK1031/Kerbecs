@@ -25,4 +25,8 @@ func VerifyConfig() {
 		config.KerbecsPassword = "admin"
 		SugarLogger.Debugln("KERBECS_PASSWORD is not set, defaulting to admin")
 	}
+	if config.UseCors == "" {
+		config.UseCors = "false"
+		SugarLogger.Debugln("USE_CORS is not set, defaulting to false")
+	}
 }

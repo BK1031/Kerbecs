@@ -27,6 +27,8 @@ var KerbecsPassword = os.Getenv("KERBECS_PASSWORD")
 var KerbecsEndpoint = os.Getenv("KERBECS_ENDPOINT")
 var KerbecsHealthCheck = os.Getenv("KERBECS_HEALTH_CHECK")
 
+var UseCors = os.Getenv("USE_CORS")
+
 var RinconClient *rincon.Client
 var RinconUser = os.Getenv("RINCON_USER")
 var RinconPassword = os.Getenv("RINCON_PASSWORD")
