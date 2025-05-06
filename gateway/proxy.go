@@ -96,8 +96,17 @@ func ProxyHandler(c *gin.Context) {
 
 	proxy := httputil.NewSingleHostReverseProxy(endpoint)
 	proxy.ModifyResponse = func(response *http.Response) error {
+		contentType := response.Header.Get("Content-Type")
+		// Don't modify file downloads, just stream as-is
+		if strings.HasPrefix(contentType, "application/octet-stream") ||
+			strings.HasPrefix(contentType, "text/csv") ||
+			strings.HasPrefix(contentType, "application/zip") ||
+			strings.HasPrefix(contentType, "application/pdf") {
+			return nil
+		}
+		// Don't modify WebSocket upgrades, leave it untouched!
 		if response.StatusCode == http.StatusSwitchingProtocols {
-			return nil // it's a WebSocket upgrade, leave it untouched!
+			return nil
 		}
 		respModel, err := BuildResponseStruct(response, *service)
 		if err != nil {
