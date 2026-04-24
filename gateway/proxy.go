@@ -2,15 +2,8 @@ package gateway
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
-	"kerbecs/config"
-	"kerbecs/model"
 	"kerbecs/utils"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,7 +46,11 @@ func ProxyResponseLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime, _ := c.Get("Request-Start-Time")
 		c.Next()
-		duration := time.Since(startTime.(time.Time)).Milliseconds()
+
+		var duration int64
+		if t, ok := startTime.(time.Time); ok {
+			duration = time.Since(t).Milliseconds()
+		}
 
 		status := c.Writer.Status()
 		isWebSocket := strings.ToLower(c.GetHeader("Upgrade")) == "websocket"
@@ -67,72 +64,7 @@ func ProxyResponseLogger() gin.HandlerFunc {
 }
 
 func ProxyHandler(c *gin.Context) {
-	startTime, _ := c.Get("Request-Start-Time")
-	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path, c.Request.Method)
-	if err != nil {
-		c.JSON(404, model.Response{
-			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-			Data:      json.RawMessage("{\"message\": \"No service to handle route: " + c.Request.URL.String() + "\"}"),
-		})
-		return
-	}
-	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
-	endpoint, err := url.Parse(service.Endpoint)
-	if err != nil {
-		c.JSON(500, model.Response{
-			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-			Data:      json.RawMessage("{\"message\": \"Failed to parse service endpoint: " + service.Endpoint + "\"}"),
-		})
-		return
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(endpoint)
-	proxy.ModifyResponse = func(response *http.Response) error {
-		contentType := response.Header.Get("Content-Type")
-		// Don't modify file downloads, just stream as-is
-		if strings.HasPrefix(contentType, "application/octet-stream") ||
-			strings.HasPrefix(contentType, "text/csv") ||
-			strings.HasPrefix(contentType, "application/zip") ||
-			strings.HasPrefix(contentType, "application/pdf") {
-			return nil
-		}
-		// Don't modify WebSocket upgrades, leave it untouched!
-		if response.StatusCode == http.StatusSwitchingProtocols {
-			return nil
-		}
-		respModel, err := BuildResponseStruct(response, *service)
-		if err != nil {
-			return err
-		}
-		respModel.Timestamp = time.Now().Format("Mon Jan 02 15:04:05 MST 2006")
-		respModel.Ping = strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms"
-		b, _ := json.Marshal(respModel)
-		response.Body = io.NopCloser(bytes.NewReader(b))
-		response.ContentLength = int64(len(b))
-		response.Header.Set("Content-Length", strconv.Itoa(len(b)))
-		return nil
-	}
-	proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, err error) {
-		utils.SugarLogger.Errorln("Failed to proxy request: " + err.Error())
-		writer.WriteHeader(http.StatusBadGateway)
-		respModel := model.Response{
-			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   service.FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-		}
-		respModel.Data = json.RawMessage("{\"message\": \"Failed to reach " + service.Name + ": " + err.Error() + "\"}")
-		b, _ := json.Marshal(respModel)
-		writer.Write(b)
-	}
-	proxy.ServeHTTP(c.Writer, c.Request)
+	c.JSON(404, gin.H{
+		"message": "No route configured for " + c.Request.Method + " " + c.Request.URL.String(),
+	})
 }

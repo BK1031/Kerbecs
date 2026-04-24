@@ -1,21 +1,14 @@
 package config
 
-import (
-	"os"
+import "os"
 
-	"github.com/bk1031/rincon-go/v2"
+const (
+	Name    = "Kerbecs"
+	Version = "2.2.0"
 )
 
-var Service rincon.Service = rincon.Service{
-	Name:    "Kerbecs",
-	Version: "2.2.0",
-}
-
-var Routes = []rincon.Route{
-	{
-		Route:  "/admin-gw/**",
-		Method: "*",
-	},
+func FormattedNameWithVersion() string {
+	return Name + ":v" + Version
 }
 
 var Env = os.Getenv("ENV")
@@ -24,12 +17,5 @@ var AdminPort = os.Getenv("ADMIN_PORT")
 
 var KerbecsUser = os.Getenv("KERBECS_USER")
 var KerbecsPassword = os.Getenv("KERBECS_PASSWORD")
-var KerbecsEndpoint = os.Getenv("KERBECS_ENDPOINT")
-var KerbecsHealthCheck = os.Getenv("KERBECS_HEALTH_CHECK")
 
 var UseCors = os.Getenv("USE_CORS")
-
-var RinconClient *rincon.Client
-var RinconUser = os.Getenv("RINCON_USER")
-var RinconPassword = os.Getenv("RINCON_PASSWORD")
-var RinconEndpoint = os.Getenv("RINCON_ENDPOINT")
