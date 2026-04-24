@@ -103,6 +103,31 @@ func TestIsBinaryContent(t *testing.T) {
 	}
 }
 
+func TestIsStreamingContent(t *testing.T) {
+	yes := []string{
+		"text/event-stream",
+		"text/event-stream; charset=utf-8",
+		"application/grpc",
+		"application/grpc+proto",
+	}
+	no := []string{
+		"application/json",
+		"text/plain",
+		"application/octet-stream",
+		"",
+	}
+	for _, ct := range yes {
+		if !isStreamingContent(ct) {
+			t.Errorf("want streaming: %q", ct)
+		}
+	}
+	for _, ct := range no {
+		if isStreamingContent(ct) {
+			t.Errorf("want non-streaming: %q", ct)
+		}
+	}
+}
+
 func TestEnvelopeFromMessage_HandlesTrickyChars(t *testing.T) {
 	msg := `broke at path: "/users/\n/123"`
 	out, err := envelopeFromMessage(502, "kerbecs", "users", time.Now(), msg)

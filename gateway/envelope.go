@@ -84,6 +84,20 @@ func isBinaryContent(ct string) bool {
 	return false
 }
 
+// isStreamingContent returns true for content types that must stream
+// (event-by-event or frame-by-frame) and would break if buffered whole.
+func isStreamingContent(ct string) bool {
+	for _, p := range []string{
+		"text/event-stream",
+		"application/grpc",
+	} {
+		if strings.HasPrefix(ct, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // modifyResponseWithEnvelope returns an httputil.ReverseProxy ModifyResponse
 // hook that buffers the upstream response and rewrites it as a Kerbecs
 // envelope. WebSocket upgrades and binary content are passed through
@@ -93,7 +107,8 @@ func modifyResponseWithEnvelope(gateway, service string, start time.Time) func(*
 		if resp.StatusCode == http.StatusSwitchingProtocols {
 			return nil
 		}
-		if isBinaryContent(resp.Header.Get("Content-Type")) {
+		ct := resp.Header.Get("Content-Type")
+		if isBinaryContent(ct) || isStreamingContent(ct) {
 			return nil
 		}
 
