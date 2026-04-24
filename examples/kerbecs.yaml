@@ -2,6 +2,9 @@ gateway:
   name: kerbecs-edge
   version: 3.0.0
   env: ${ENV:DEV}
+  limits:
+    max_request_bytes: 100MB
+    max_response_bytes: 100MB
 
 listeners:
   gateway:
@@ -50,3 +53,5 @@ routes:
     rewrite:
       strip_prefix: /echo
     envelope: passthrough
+    limits:
+      max_request_bytes: 10KB   # tight per-route override for demo

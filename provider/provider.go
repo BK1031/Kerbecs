@@ -20,7 +20,15 @@ type Route struct {
 	Upstream    *Upstream
 	Rewrite     *Rewrite
 	Envelope    EnvelopeMode
+	Limits      Limits
 	Middlewares []string
+}
+
+// Limits are the fully-resolved byte caps for a route (global default merged
+// with any per-route override).
+type Limits struct {
+	MaxRequestBytes  int64
+	MaxResponseBytes int64
 }
 
 // RouteMatch carries unparsed match parameters; the actual matcher is built

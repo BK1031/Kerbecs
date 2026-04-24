@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"kerbecs/provider"
 	"kerbecs/router"
 	"kerbecs/utils"
@@ -94,6 +95,18 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 
 		up := match.Route.Upstream
 		service := up.FormattedNameWithVersion()
+		limits := match.Route.Limits
+
+		// Request body cap — reject up front when Content-Length is known.
+		if limits.MaxRequestBytes > 0 && c.Request.ContentLength > limits.MaxRequestBytes {
+			writeError(c, match.Route.Envelope, http.StatusRequestEntityTooLarge, gateway, service, start,
+				"request body exceeds max_request_bytes")
+			return
+		}
+		// Wrap for streaming uploads where Content-Length is unknown or spoofed.
+		if limits.MaxRequestBytes > 0 && c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limits.MaxRequestBytes)
+		}
 
 		if len(up.Instances) == 0 {
 			writeError(c, match.Route.Envelope, http.StatusBadGateway, gateway, service, start,
@@ -121,17 +134,38 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 			proxy.Transport = tr
 		}
 		if match.Route.Envelope == provider.EnvelopeDefault {
-			proxy.ModifyResponse = modifyResponseWithEnvelope(gateway, service, start)
+			proxy.ModifyResponse = modifyResponseWithEnvelope(gateway, service, start, limits.MaxResponseBytes)
 		}
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			utils.SugarLogger.Errorf("failed to reach upstream %q: %v", up.Name, err)
-			writeUpstreamError(w, match.Route.Envelope, gateway, service, start, up.Name, err)
+			handleProxyError(w, match.Route.Envelope, gateway, service, start, up.Name, err)
 		}
 		proxy.ServeHTTP(c.Writer, c.Request)
 	}
 }
 
-// writeError emits an error response, enveloped if the route requested it.
+// handleProxyError translates a reverse-proxy error into a terminal response.
+// Size-cap violations get their own status codes; everything else is 502.
+func handleProxyError(w http.ResponseWriter, mode provider.EnvelopeMode, gateway, service string, start time.Time, upstream string, err error) {
+	var maxBytes *http.MaxBytesError
+	if errors.As(err, &maxBytes) {
+		utils.SugarLogger.Warnf("request from client to %q exceeded max_request_bytes (limit %d)", upstream, maxBytes.Limit)
+		writeRawError(w, mode, http.StatusRequestEntityTooLarge, gateway, service, start,
+			"request body exceeds max_request_bytes")
+		return
+	}
+	if errors.Is(err, errResponseTooLarge) {
+		utils.SugarLogger.Warnf("upstream %q response exceeded max_response_bytes", upstream)
+		writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
+			"upstream response exceeds max_response_bytes")
+		return
+	}
+	utils.SugarLogger.Errorf("failed to reach upstream %q: %v", upstream, err)
+	writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
+		"upstream unreachable: "+upstream+": "+err.Error())
+}
+
+// writeError emits an error response via gin.Context, enveloped if the route
+// requested it.
 func writeError(c *gin.Context, mode provider.EnvelopeMode, code int, gateway, service string, start time.Time, message string) {
 	if mode == provider.EnvelopeDefault {
 		body, err := envelopeFromMessage(code, gateway, service, start, message)
@@ -145,23 +179,20 @@ func writeError(c *gin.Context, mode provider.EnvelopeMode, code int, gateway, s
 	c.JSON(code, gin.H{"message": message})
 }
 
-// writeUpstreamError is the ReverseProxy.ErrorHandler equivalent of
-// writeError; it writes directly to the ResponseWriter since gin's Context is
-// no longer applicable at that point.
-func writeUpstreamError(w http.ResponseWriter, mode provider.EnvelopeMode, gateway, service string, start time.Time, upstream string, cause error) {
-	msg := "upstream unreachable: " + upstream + ": " + cause.Error()
+// writeRawError is the ResponseWriter equivalent of writeError, used from
+// inside ReverseProxy hooks where gin.Context is no longer applicable.
+func writeRawError(w http.ResponseWriter, mode provider.EnvelopeMode, code int, gateway, service string, start time.Time, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadGateway)
+	w.WriteHeader(code)
 
 	if mode == provider.EnvelopeDefault {
-		body, err := envelopeFromMessage(http.StatusBadGateway, gateway, service, start, msg)
+		body, err := envelopeFromMessage(code, gateway, service, start, message)
 		if err == nil {
 			_, _ = w.Write(body)
 			return
 		}
 	}
-	// Fall back to a plain JSON shape built via marshal, not string concat.
-	if fallback, err := json.Marshal(map[string]string{"message": msg}); err == nil {
+	if fallback, err := json.Marshal(map[string]string{"message": message}); err == nil {
 		_, _ = w.Write(fallback)
 	} else {
 		_, _ = w.Write([]byte(`{"message":"internal marshal error"}`))

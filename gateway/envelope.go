@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"kerbecs/model"
 	"net/http"
@@ -10,6 +11,12 @@ import (
 	"strings"
 	"time"
 )
+
+// errResponseTooLarge is returned by ModifyResponse when the upstream body
+// exceeds the route's max_response_bytes. NewProxyHandler's ErrorHandler
+// recognizes this and emits a 502 instead of the generic unreachable-upstream
+// message.
+var errResponseTooLarge = errors.New("upstream response exceeds max_response_bytes")
 
 const timestampFormat = "Mon Jan 02 15:04:05 MST 2006"
 
@@ -84,6 +91,16 @@ func isBinaryContent(ct string) bool {
 	return false
 }
 
+// limitedCloser pairs an io.LimitReader with the original body's Close so
+// ReadAll can short-circuit without leaking the upstream connection.
+type limitedCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (l *limitedCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
+func (l *limitedCloser) Close() error                { return l.c.Close() }
+
 // isStreamingContent returns true for content types that must stream
 // (event-by-event or frame-by-frame) and would break if buffered whole.
 func isStreamingContent(ct string) bool {
@@ -100,9 +117,10 @@ func isStreamingContent(ct string) bool {
 
 // modifyResponseWithEnvelope returns an httputil.ReverseProxy ModifyResponse
 // hook that buffers the upstream response and rewrites it as a Kerbecs
-// envelope. WebSocket upgrades and binary content are passed through
-// untouched.
-func modifyResponseWithEnvelope(gateway, service string, start time.Time) func(*http.Response) error {
+// envelope. WebSocket upgrades, binary content, and streaming content are
+// passed through untouched. Bodies larger than maxBytes produce
+// errResponseTooLarge, which the handler translates to a 502.
+func modifyResponseWithEnvelope(gateway, service string, start time.Time, maxBytes int64) func(*http.Response) error {
 	return func(resp *http.Response) error {
 		if resp.StatusCode == http.StatusSwitchingProtocols {
 			return nil
@@ -112,12 +130,30 @@ func modifyResponseWithEnvelope(gateway, service string, start time.Time) func(*
 			return nil
 		}
 
-		body, err := io.ReadAll(resp.Body)
+		// Fail fast when the upstream declares a Content-Length over the cap.
+		if maxBytes > 0 && resp.ContentLength > maxBytes {
+			_ = resp.Body.Close()
+			return errResponseTooLarge
+		}
+
+		reader := resp.Body
+		if maxBytes > 0 {
+			// Read one extra byte so we can detect overflow without scanning
+			// the whole body.
+			reader = &limitedCloser{
+				r: io.LimitReader(resp.Body, maxBytes+1),
+				c: resp.Body,
+			}
+		}
+		body, err := io.ReadAll(reader)
 		if err != nil {
 			return err
 		}
 		if err := resp.Body.Close(); err != nil {
 			return err
+		}
+		if maxBytes > 0 && int64(len(body)) > maxBytes {
+			return errResponseTooLarge
 		}
 
 		out, err := envelopeFromBody(resp.StatusCode, gateway, service, start, body)

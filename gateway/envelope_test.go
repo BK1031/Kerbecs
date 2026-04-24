@@ -1,8 +1,12 @@
 package gateway
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"kerbecs/model"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -125,6 +129,54 @@ func TestIsStreamingContent(t *testing.T) {
 		if isStreamingContent(ct) {
 			t.Errorf("want non-streaming: %q", ct)
 		}
+	}
+}
+
+func TestModifyResponseWithEnvelope_BodyTooLarge(t *testing.T) {
+	big := bytes.Repeat([]byte("a"), 200)
+	resp := &http.Response{
+		StatusCode:    200,
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		ContentLength: 200,
+		Body:          io.NopCloser(bytes.NewReader(big)),
+	}
+	modify := modifyResponseWithEnvelope("kerbecs", "users", time.Now(), 100)
+	err := modify(resp)
+	if !errors.Is(err, errResponseTooLarge) {
+		t.Errorf("want errResponseTooLarge, got %v", err)
+	}
+}
+
+func TestModifyResponseWithEnvelope_UnknownContentLength(t *testing.T) {
+	big := bytes.Repeat([]byte("x"), 200)
+	resp := &http.Response{
+		StatusCode:    200,
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		ContentLength: -1, // unknown
+		Body:          io.NopCloser(bytes.NewReader(big)),
+	}
+	modify := modifyResponseWithEnvelope("kerbecs", "users", time.Now(), 100)
+	err := modify(resp)
+	if !errors.Is(err, errResponseTooLarge) {
+		t.Errorf("want errResponseTooLarge (detected via LimitReader), got %v", err)
+	}
+}
+
+func TestModifyResponseWithEnvelope_UnderCap(t *testing.T) {
+	body := []byte(`{"ok":true}`)
+	resp := &http.Response{
+		StatusCode:    200,
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		ContentLength: int64(len(body)),
+		Body:          io.NopCloser(bytes.NewReader(body)),
+	}
+	modify := modifyResponseWithEnvelope("kerbecs", "users", time.Now(), 1024)
+	if err := modify(resp); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(resp.Body)
+	if !bytes.Contains(got, []byte(`"data":{"ok":true}`)) {
+		t.Errorf("envelope missing data: %s", got)
 	}
 }
 

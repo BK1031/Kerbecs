@@ -5,6 +5,12 @@ import (
 	"kerbecs/config"
 )
 
+// Defaults applied when neither global nor route limits are set.
+const (
+	defaultMaxRequestBytes  int64 = 100 << 20 // 100 MiB
+	defaultMaxResponseBytes int64 = 100 << 20 // 100 MiB
+)
+
 // Static is a Provider backed by the parsed config file. Routes are resolved
 // once at construction; hot reload is deferred to a later phase.
 type Static struct {
@@ -12,6 +18,11 @@ type Static struct {
 }
 
 func NewStatic(f *config.File) (*Static, error) {
+	globalLimits := Limits{
+		MaxRequestBytes:  nonZeroInt64(f.Gateway.Limits.MaxRequestBytes.Bytes(), defaultMaxRequestBytes),
+		MaxResponseBytes: nonZeroInt64(f.Gateway.Limits.MaxResponseBytes.Bytes(), defaultMaxResponseBytes),
+	}
+
 	upstreams := make(map[string]*Upstream, len(f.Upstreams))
 	for name, u := range f.Upstreams {
 		upstreams[name] = &Upstream{
@@ -51,10 +62,32 @@ func NewStatic(f *config.File) (*Static, error) {
 			Upstream:    up,
 			Rewrite:     convertRewrite(r.Rewrite),
 			Envelope:    env,
+			Limits:      mergeLimits(globalLimits, r.Limits),
 			Middlewares: append([]string(nil), r.Middlewares...),
 		})
 	}
 	return &Static{routes: routes}, nil
+}
+
+func mergeLimits(global Limits, override *config.Limits) Limits {
+	out := global
+	if override == nil {
+		return out
+	}
+	if v := override.MaxRequestBytes.Bytes(); v > 0 {
+		out.MaxRequestBytes = v
+	}
+	if v := override.MaxResponseBytes.Bytes(); v > 0 {
+		out.MaxResponseBytes = v
+	}
+	return out
+}
+
+func nonZeroInt64(v, fallback int64) int64 {
+	if v <= 0 {
+		return fallback
+	}
+	return v
 }
 
 func (s *Static) Name() string     { return "static" }

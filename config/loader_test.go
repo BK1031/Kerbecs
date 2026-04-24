@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestLoadFile(t *testing.T) {
@@ -84,6 +86,47 @@ routes:
 	}
 	if cfg.Routes[0].Match.Path != "/users/*" {
 		t.Errorf("route path: %q", cfg.Routes[0].Match.Path)
+	}
+}
+
+func TestSize_UnmarshalYAML(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int64
+	}{
+		{`100MB`, 100 << 20},
+		{`500KB`, 500 << 10},
+		{`1GiB`, 1 << 30},
+		{`1024`, 1024},
+		{`1.5MB`, int64(1.5 * float64(1<<20))},
+		{`10 M`, 10 << 20},
+		{`2 B`, 2},
+	}
+	for _, c := range cases {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "s.yaml")
+		if err := os.WriteFile(path, []byte("size: "+c.in), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Size Size `yaml:"size"`
+		}
+		raw, _ := os.ReadFile(path)
+		if err := yaml.Unmarshal(raw, &doc); err != nil {
+			t.Errorf("%q: %v", c.in, err)
+			continue
+		}
+		if doc.Size.Bytes() != c.want {
+			t.Errorf("%q: got %d, want %d", c.in, doc.Size.Bytes(), c.want)
+		}
+	}
+
+	// Invalid units should fail.
+	var doc struct {
+		Size Size `yaml:"size"`
+	}
+	if err := yaml.Unmarshal([]byte("size: 10QQ"), &doc); err == nil {
+		t.Errorf("expected error for invalid unit")
 	}
 }
 

@@ -1,6 +1,10 @@
 package config
 
 import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -22,6 +26,14 @@ type GatewaySection struct {
 	Name    string `yaml:"name"`
 	Version string `yaml:"version"`
 	Env     string `yaml:"env"`
+	Limits  Limits `yaml:"limits"`
+}
+
+// Limits caps the size of request and response bodies. At the gateway level
+// these are global defaults; per-route limits override.
+type Limits struct {
+	MaxRequestBytes  Size `yaml:"max_request_bytes,omitempty"`
+	MaxResponseBytes Size `yaml:"max_response_bytes,omitempty"`
 }
 
 type ListenersSection struct {
@@ -103,6 +115,7 @@ type Route struct {
 	Rewrite     *Rewrite   `yaml:"rewrite,omitempty"`
 	Envelope    string     `yaml:"envelope,omitempty"`
 	Middlewares []string   `yaml:"middlewares,omitempty"`
+	Limits      *Limits    `yaml:"limits,omitempty"`
 }
 
 type RouteMatch struct {
@@ -146,6 +159,61 @@ type TracingConfig struct {
 type OTLPConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"`
+}
+
+// Size is a byte count that YAML-unmarshals from strings like "100MB",
+// "500KB", "1GiB", or from raw integer bytes. Binary multipliers (1024)
+// are used for all suffixes.
+type Size int64
+
+func (s Size) Bytes() int64 { return int64(s) }
+
+var sizeRE = regexp.MustCompile(`^\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]*)\s*$`)
+
+func (s *Size) UnmarshalYAML(value *yaml.Node) error {
+	// Try integer first.
+	var n int64
+	if err := value.Decode(&n); err == nil {
+		*s = Size(n)
+		return nil
+	}
+	var raw string
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	if raw == "" {
+		*s = 0
+		return nil
+	}
+	m := sizeRE.FindStringSubmatch(raw)
+	if m == nil {
+		return fmt.Errorf("invalid size %q", raw)
+	}
+	num, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return fmt.Errorf("invalid size %q: %w", raw, err)
+	}
+	mult, err := sizeMultiplier(m[2])
+	if err != nil {
+		return fmt.Errorf("invalid size %q: %w", raw, err)
+	}
+	*s = Size(int64(num * float64(mult)))
+	return nil
+}
+
+func sizeMultiplier(unit string) (int64, error) {
+	switch strings.ToUpper(unit) {
+	case "", "B":
+		return 1, nil
+	case "K", "KB", "KIB":
+		return 1 << 10, nil
+	case "M", "MB", "MIB":
+		return 1 << 20, nil
+	case "G", "GB", "GIB":
+		return 1 << 30, nil
+	default:
+		return 0, fmt.Errorf("unknown size unit %q", unit)
+	}
 }
 
 // Duration wraps time.Duration for YAML unmarshaling of strings like "5s".
