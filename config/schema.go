@@ -47,8 +47,9 @@ type GatewayListener struct {
 }
 
 type AdminListener struct {
-	Port string    `yaml:"port"`
-	Auth AdminAuth `yaml:"auth"`
+	Port string      `yaml:"port"`
+	Auth AdminAuth   `yaml:"auth"`
+	CORS *CORSConfig `yaml:"cors,omitempty"`
 }
 
 type AdminAuth struct {

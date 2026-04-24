@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"kerbecs/config"
 	"kerbecs/pkg/logger"
 	"net/http"
 	"strings"
@@ -23,6 +24,7 @@ type Config struct {
 	Env      string
 	Username string
 	Password string
+	CORS     *config.CORSConfig
 }
 
 // Serve starts the admin HTTP listener and blocks until ctx is canceled, at
@@ -64,13 +66,9 @@ func SetupRouter(cfg Config) *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
-	r.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
-		MaxAge:           12 * time.Hour,
-		AllowCredentials: true,
-	}))
+	if cfg.CORS != nil && cfg.CORS.Enabled {
+		r.Use(cors.New(buildCORSConfig(cfg.CORS)))
+	}
 	r.Use(AuthMiddleware(cfg.Username, cfg.Password))
 	return r
 }
@@ -105,4 +103,27 @@ func AuthMiddleware(username, password string) gin.HandlerFunc {
 
 func constantTimeEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+// buildCORSConfig translates a config.CORSConfig into a gin-contrib/cors
+// config, filling in reasonable method/header defaults when unset.
+func buildCORSConfig(c *config.CORSConfig) cors.Config {
+	out := cors.Config{
+		AllowAllOrigins:  c.AllowAllOrigins,
+		AllowOrigins:     c.AllowedOrigins,
+		AllowMethods:     c.AllowedMethods,
+		AllowHeaders:     c.AllowedHeaders,
+		AllowCredentials: c.AllowCredentials,
+		MaxAge:           c.MaxAge.AsDuration(),
+	}
+	if len(out.AllowMethods) == 0 {
+		out.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+	}
+	if len(out.AllowHeaders) == 0 {
+		out.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	}
+	if out.MaxAge == 0 {
+		out.MaxAge = 12 * time.Hour
+	}
+	return out
 }

@@ -59,6 +59,7 @@ func main() {
 		Env:      file.Gateway.Env,
 		Username: file.Listeners.Admin.Auth.Username,
 		Password: file.Listeners.Admin.Auth.Password,
+		CORS:     file.Listeners.Admin.CORS,
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
