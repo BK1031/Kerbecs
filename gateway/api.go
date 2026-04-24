@@ -2,19 +2,19 @@ package gateway
 
 import (
 	"kerbecs/config"
+	"kerbecs/router"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-func StartServer() error {
-	router := SetupRouter()
-	InitializeRoutes(router)
-	return router.Run(":" + config.Port)
+func StartServer(rt *router.Router) error {
+	engine := SetupRouter(rt)
+	return engine.Run(":" + config.Port)
 }
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(rt *router.Router) *gin.Engine {
 	if config.Env == "PROD" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -31,9 +31,6 @@ func SetupRouter() *gin.Engine {
 	r.Use(ProxyRequestLogger())
 	r.Use(ProxyAuthMiddleware())
 	r.Use(ProxyResponseLogger())
+	r.Any("/*path", NewProxyHandler(rt))
 	return r
-}
-
-func InitializeRoutes(router *gin.Engine) {
-	router.Any("/*path", ProxyHandler)
 }

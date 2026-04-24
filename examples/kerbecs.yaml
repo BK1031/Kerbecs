@@ -1,0 +1,52 @@
+gateway:
+  name: kerbecs-edge
+  version: 3.0.0
+  env: ${ENV:DEV}
+
+listeners:
+  gateway:
+    port: ${PORT:10310}
+  admin:
+    port: ${ADMIN_PORT:10300}
+    auth:
+      type: basic
+      username: ${KERBECS_USER:admin}
+      password: ${KERBECS_PASSWORD:admin}
+
+providers:
+  static:
+    watch: false
+
+upstreams:
+  users-service:
+    name: users
+    version: 1.0.0
+    instances:
+      - http://localhost:8081
+    timeouts:
+      dial: 2s
+      response_header: 5s
+      overall: 30s
+      idle: 90s
+
+  echo-service:
+    name: echo
+    version: 1.0.0
+    instances:
+      - http://localhost:8082
+
+routes:
+  - name: users-api
+    match:
+      path: /users/*
+      methods: [GET, POST, PUT, DELETE]
+    upstream: users-service
+    envelope: default
+
+  - name: echo-passthrough
+    match:
+      path: /echo/*
+    upstream: echo-service
+    rewrite:
+      strip_prefix: /echo
+    envelope: passthrough
