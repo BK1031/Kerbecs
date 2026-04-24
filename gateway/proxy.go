@@ -1,9 +1,7 @@
 package gateway
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"kerbecs/provider"
 	"kerbecs/router"
 	"kerbecs/utils"
@@ -36,13 +34,6 @@ func ProxyRequestLogger() gin.HandlerFunc {
 		utils.SugarLogger.Infoln(time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
 		utils.SugarLogger.Infoln("REQUEST ID: " + requestID.String())
 		utils.SugarLogger.Infoln("REQUEST ROUTE: " + c.Request.Host + c.Request.URL.String() + " [" + c.Request.Method + "]")
-		bodyBytes, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			utils.SugarLogger.Infoln("REQUEST BODY: " + err.Error())
-		} else {
-			utils.SugarLogger.Infoln("REQUEST BODY: " + string(bodyBytes))
-		}
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		utils.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
 		c.Request.Header.Set("Request-ID", requestID.String())
 		if strings.ToLower(c.GetHeader("Upgrade")) != "" {
