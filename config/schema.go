@@ -58,7 +58,9 @@ type AdminAuth struct {
 }
 
 type CORSConfig struct {
-	AllowedOrigins   []string `yaml:"allowed_origins"`
+	Enabled          bool     `yaml:"enabled"`
+	AllowAllOrigins  bool     `yaml:"allow_all_origins,omitempty"`
+	AllowedOrigins   []string `yaml:"allowed_origins,omitempty"`
 	AllowedMethods   []string `yaml:"allowed_methods,omitempty"`
 	AllowedHeaders   []string `yaml:"allowed_headers,omitempty"`
 	AllowCredentials bool     `yaml:"allow_credentials,omitempty"`

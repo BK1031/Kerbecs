@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"kerbecs/config"
 	"kerbecs/utils"
 	"net/http"
 	"strings"
@@ -18,19 +17,27 @@ import (
 
 const shutdownTimeout = 30 * time.Second
 
+// Config is everything the admin listener needs from the loaded config file.
+type Config struct {
+	Port     string
+	Env      string
+	Username string
+	Password string
+}
+
 // Serve starts the admin HTTP listener and blocks until ctx is canceled, at
 // which point it drains in-flight requests up to shutdownTimeout.
-func Serve(ctx context.Context) error {
-	engine := SetupRouter()
+func Serve(ctx context.Context, cfg Config) error {
+	engine := SetupRouter(cfg)
 	InitializeRoutes(engine)
 	srv := &http.Server{
-		Addr:    ":" + config.AdminPort,
+		Addr:    ":" + cfg.Port,
 		Handler: engine,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		utils.SugarLogger.Infof("admin listening on :%s", config.AdminPort)
+		utils.SugarLogger.Infof("admin listening on :%s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
@@ -52,8 +59,8 @@ func Serve(ctx context.Context) error {
 	}
 }
 
-func SetupRouter() *gin.Engine {
-	if config.Env == "PROD" {
+func SetupRouter(cfg Config) *gin.Engine {
+	if cfg.Env == "PROD" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
@@ -64,7 +71,7 @@ func SetupRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 		AllowCredentials: true,
 	}))
-	r.Use(AuthMiddleware())
+	r.Use(AuthMiddleware(cfg.Username, cfg.Password))
 	return r
 }
 
@@ -73,7 +80,7 @@ func InitializeRoutes(router *gin.Engine) {
 	gw.GET("/ping", Ping)
 }
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(username, password string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.FullPath() != "/admin-gw/ping" {
 			auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
@@ -87,7 +94,7 @@ func AuthMiddleware() gin.HandlerFunc {
 				return
 			}
 			pair := strings.SplitN(string(payload), ":", 2)
-			if len(pair) != 2 || !constantTimeEqual(pair[0], config.KerbecsUser) || !constantTimeEqual(pair[1], config.KerbecsPassword) {
+			if len(pair) != 2 || !constantTimeEqual(pair[0], username) || !constantTimeEqual(pair[1], password) {
 				c.AbortWithStatusJSON(401, gin.H{"message": "Invalid credentials"})
 				return
 			}

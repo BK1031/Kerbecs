@@ -15,18 +15,20 @@ import (
 )
 
 func main() {
-	config.PrintStartupBanner()
 	utils.InitializeLogger()
 	defer utils.Logger.Sync()
-
-	utils.VerifyConfig()
 
 	path := config.FilePath()
 	file, err := config.LoadFile(path)
 	if err != nil {
 		utils.SugarLogger.Fatalf("Failed to load config %s: %v", path, err)
 	}
+	for _, w := range config.ApplyDefaults(file) {
+		utils.SugarLogger.Warnln(w)
+	}
 	utils.SugarLogger.Infof("Loaded config from %s", path)
+
+	config.PrintStartupBanner(file.Gateway.Env)
 
 	static, err := provider.NewStatic(file)
 	if err != nil {
@@ -43,13 +45,24 @@ func main() {
 		GatewayName:    firstNonEmpty(file.Gateway.Name, config.Name),
 		GatewayVersion: firstNonEmpty(file.Gateway.Version, config.Version),
 	}
+	listenerCfg := gateway.ListenerConfig{
+		Port: file.Listeners.Gateway.Port,
+		Env:  file.Gateway.Env,
+		CORS: file.Listeners.Gateway.CORS,
+	}
+	adminCfg := admin.Config{
+		Port:     file.Listeners.Admin.Port,
+		Env:      file.Gateway.Env,
+		Username: file.Listeners.Admin.Auth.Username,
+		Password: file.Listeners.Admin.Auth.Password,
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	var eg errgroup.Group
-	eg.Go(func() error { return admin.Serve(ctx) })
-	eg.Go(func() error { return gateway.Serve(ctx, handlerCfg, rt) })
+	eg.Go(func() error { return admin.Serve(ctx, adminCfg) })
+	eg.Go(func() error { return gateway.Serve(ctx, listenerCfg, handlerCfg, rt) })
 
 	if err := eg.Wait(); err != nil {
 		utils.SugarLogger.Fatalf("server error: %v", err)

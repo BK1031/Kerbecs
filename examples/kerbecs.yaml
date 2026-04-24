@@ -9,6 +9,10 @@ gateway:
 listeners:
   gateway:
     port: ${PORT:10310}
+    # cors:
+    #   enabled: true
+    #   allowed_origins: [https://app.example.com]
+    #   allow_credentials: true
   admin:
     port: ${ADMIN_PORT:10300}
     auth:
