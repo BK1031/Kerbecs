@@ -5,7 +5,7 @@ import (
 	"errors"
 	"kerbecs/provider"
 	"kerbecs/router"
-	"kerbecs/utils"
+	"kerbecs/pkg/logger"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -31,14 +31,14 @@ func ProxyRequestLogger() gin.HandlerFunc {
 		requestID, _ := uuid.NewV7()
 		c.Set("Request-ID", requestID.String())
 		c.Set("Request-Start-Time", time.Now())
-		utils.SugarLogger.Infoln("-------------------------------------------------------------------")
-		utils.SugarLogger.Infoln(time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
-		utils.SugarLogger.Infoln("REQUEST ID: " + requestID.String())
-		utils.SugarLogger.Infoln("REQUEST ROUTE: " + c.Request.Host + c.Request.URL.String() + " [" + c.Request.Method + "]")
-		utils.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
+		logger.SugarLogger.Infoln("-------------------------------------------------------------------")
+		logger.SugarLogger.Infoln(time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
+		logger.SugarLogger.Infoln("REQUEST ID: " + requestID.String())
+		logger.SugarLogger.Infoln("REQUEST ROUTE: " + c.Request.Host + c.Request.URL.String() + " [" + c.Request.Method + "]")
+		logger.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
 		c.Request.Header.Set("Request-ID", requestID.String())
 		if strings.ToLower(c.GetHeader("Upgrade")) != "" {
-			utils.SugarLogger.Infoln("UPGRADE: " + c.GetHeader("Upgrade"))
+			logger.SugarLogger.Infoln("UPGRADE: " + c.GetHeader("Upgrade"))
 		}
 		c.Next()
 	}
@@ -64,9 +64,9 @@ func ProxyResponseLogger() gin.HandlerFunc {
 		isWebSocket := strings.ToLower(c.GetHeader("Upgrade")) == "websocket"
 
 		if isWebSocket {
-			utils.SugarLogger.Infof("WS STATUS: %d – took %dms", status, duration)
+			logger.SugarLogger.Infof("WS STATUS: %d – took %dms", status, duration)
 		} else {
-			utils.SugarLogger.Infof("RESPONSE STATUS: %d – took %dms", status, duration)
+			logger.SugarLogger.Infof("RESPONSE STATUS: %d – took %dms", status, duration)
 		}
 	}
 }
@@ -116,7 +116,7 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 
 		target, err := url.Parse(up.Instances[0])
 		if err != nil {
-			utils.SugarLogger.Errorf("upstream %q: invalid endpoint %q: %v", up.Name, up.Instances[0], err)
+			logger.SugarLogger.Errorf("upstream %q: invalid endpoint %q: %v", up.Name, up.Instances[0], err)
 			writeError(c, match.Route.Envelope, http.StatusInternalServerError, gateway, service, start,
 				"Invalid upstream endpoint for "+up.Name)
 			return
@@ -127,7 +127,7 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 			c.Request.URL.RawPath = ""
 		}
 
-		utils.SugarLogger.Infof("PROXY TO: %s @ %s%s", service, target.String(), c.Request.URL.Path)
+		logger.SugarLogger.Infof("PROXY TO: %s @ %s%s", service, target.String(), c.Request.URL.Path)
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		if tr, ok := transports[up.Name]; ok {
@@ -148,18 +148,18 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 func handleProxyError(w http.ResponseWriter, mode provider.EnvelopeMode, gateway, service string, start time.Time, upstream string, err error) {
 	var maxBytes *http.MaxBytesError
 	if errors.As(err, &maxBytes) {
-		utils.SugarLogger.Warnf("request from client to %q exceeded max_request_bytes (limit %d)", upstream, maxBytes.Limit)
+		logger.SugarLogger.Warnf("request from client to %q exceeded max_request_bytes (limit %d)", upstream, maxBytes.Limit)
 		writeRawError(w, mode, http.StatusRequestEntityTooLarge, gateway, service, start,
 			"request body exceeds max_request_bytes")
 		return
 	}
 	if errors.Is(err, errResponseTooLarge) {
-		utils.SugarLogger.Warnf("upstream %q response exceeded max_response_bytes", upstream)
+		logger.SugarLogger.Warnf("upstream %q response exceeded max_response_bytes", upstream)
 		writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
 			"upstream response exceeds max_response_bytes")
 		return
 	}
-	utils.SugarLogger.Errorf("failed to reach upstream %q: %v", upstream, err)
+	logger.SugarLogger.Errorf("failed to reach upstream %q: %v", upstream, err)
 	writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
 		"upstream unreachable: "+upstream+": "+err.Error())
 }

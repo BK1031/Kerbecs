@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"kerbecs/config"
 	"kerbecs/router"
-	"kerbecs/utils"
+	"kerbecs/pkg/logger"
 	"net/http"
 	"time"
 
@@ -35,7 +35,7 @@ func Serve(ctx context.Context, listener ListenerConfig, handler HandlerConfig, 
 
 	errCh := make(chan error, 1)
 	go func() {
-		utils.SugarLogger.Infof("gateway listening on :%s", listener.Port)
+		logger.SugarLogger.Infof("gateway listening on :%s", listener.Port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
@@ -45,7 +45,7 @@ func Serve(ctx context.Context, listener ListenerConfig, handler HandlerConfig, 
 
 	select {
 	case <-ctx.Done():
-		utils.SugarLogger.Infoln("gateway: draining")
+		logger.SugarLogger.Infoln("gateway: draining")
 		shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutCtx); err != nil {

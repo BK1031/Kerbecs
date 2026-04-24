@@ -1,13 +1,10 @@
-package utils
+package logger
 
-import (
-	"testing"
-)
+import "testing"
 
-func TestInitializeLogger(t *testing.T) {
-	t.Run("DEV", func(t *testing.T) {
-		t.Setenv("ENV", "DEV")
-		InitializeLogger()
+func TestInit(t *testing.T) {
+	t.Run("development", func(t *testing.T) {
+		Init(false)
 		if Logger == nil {
 			t.Error("Expected Logger to not be nil")
 		}
@@ -15,9 +12,8 @@ func TestInitializeLogger(t *testing.T) {
 			t.Error("Expected SugarLogger to not be nil")
 		}
 	})
-	t.Run("PROD", func(t *testing.T) {
-		t.Setenv("ENV", "PROD")
-		InitializeLogger()
+	t.Run("production", func(t *testing.T) {
+		Init(true)
 		if Logger == nil {
 			t.Error("Expected Logger to not be nil")
 		}

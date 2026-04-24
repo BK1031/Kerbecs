@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"kerbecs/utils"
+	"kerbecs/pkg/logger"
 	"net/http"
 	"strings"
 	"time"
@@ -37,7 +37,7 @@ func Serve(ctx context.Context, cfg Config) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		utils.SugarLogger.Infof("admin listening on :%s", cfg.Port)
+		logger.SugarLogger.Infof("admin listening on :%s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
@@ -47,7 +47,7 @@ func Serve(ctx context.Context, cfg Config) error {
 
 	select {
 	case <-ctx.Done():
-		utils.SugarLogger.Infoln("admin: draining")
+		logger.SugarLogger.Infoln("admin: draining")
 		shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutCtx); err != nil {
