@@ -38,13 +38,27 @@ func main() {
 		utils.SugarLogger.Fatalf("Failed to build router: %v", err)
 	}
 
+	handlerCfg := gateway.HandlerConfig{
+		GatewayName:    firstNonEmpty(file.Gateway.Name, config.Name),
+		GatewayVersion: firstNonEmpty(file.Gateway.Version, config.Version),
+	}
+
 	eg.Go(func() error {
 		return admin.StartServer()
 	})
 	eg.Go(func() error {
-		return gateway.StartServer(rt)
+		return gateway.StartServer(handlerCfg, rt)
 	})
 	if err := eg.Wait(); err != nil {
 		utils.SugarLogger.Fatalf("Failed to start servers: %v", err)
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

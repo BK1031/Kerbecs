@@ -9,12 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func StartServer(rt *router.Router) error {
-	engine := SetupRouter(rt)
+func StartServer(cfg HandlerConfig, rt *router.Router) error {
+	engine := SetupRouter(cfg, rt)
 	return engine.Run(":" + config.Port)
 }
 
-func SetupRouter(rt *router.Router) *gin.Engine {
+func SetupRouter(cfg HandlerConfig, rt *router.Router) *gin.Engine {
 	if config.Env == "PROD" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -31,6 +31,6 @@ func SetupRouter(rt *router.Router) *gin.Engine {
 	r.Use(ProxyRequestLogger())
 	r.Use(ProxyAuthMiddleware())
 	r.Use(ProxyResponseLogger())
-	r.Any("/*path", NewProxyHandler(rt))
+	r.Any("/*path", NewProxyHandler(cfg, rt))
 	return r
 }
