@@ -30,6 +30,9 @@ upstreams:
     version: 1.0.0
     instances:
       - http://localhost:8081
+      - http://localhost:8082
+      - http://localhost:8083
+    load_balancer: round_robin   # round_robin (default) | random
     timeouts:
       dial: 2s
       response_header: 5s

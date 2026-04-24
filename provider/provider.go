@@ -58,10 +58,19 @@ type Upstream struct {
 	LoadBalancer string
 	HealthCheck  *HealthCheck
 	Timeouts     Timeouts
+
+	lb LoadBalancer
 }
 
 func (u *Upstream) FormattedNameWithVersion() string {
 	return u.Name + ":v" + u.Version
+}
+
+// Pick returns an instance URL chosen by the upstream's load balancer.
+// Callers can assume the result is non-empty — NewStatic rejects upstreams
+// with empty instance lists at config-load time.
+func (u *Upstream) Pick() string {
+	return u.lb.Pick()
 }
 
 type HealthCheck struct {

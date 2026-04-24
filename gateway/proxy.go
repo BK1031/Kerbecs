@@ -108,15 +108,10 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limits.MaxRequestBytes)
 		}
 
-		if len(up.Instances) == 0 {
-			writeError(c, match.Route.Envelope, http.StatusBadGateway, gateway, service, start,
-				"No instances available for upstream "+up.Name)
-			return
-		}
-
-		target, err := url.Parse(up.Instances[0])
+		instance := up.Pick()
+		target, err := url.Parse(instance)
 		if err != nil {
-			logger.SugarLogger.Errorf("upstream %q: invalid endpoint %q: %v", up.Name, up.Instances[0], err)
+			logger.SugarLogger.Errorf("upstream %q: invalid endpoint %q: %v", up.Name, instance, err)
 			writeError(c, match.Route.Envelope, http.StatusInternalServerError, gateway, service, start,
 				"Invalid upstream endpoint for "+up.Name)
 			return

@@ -95,3 +95,42 @@ func TestNewStatic_MissingPath(t *testing.T) {
 		t.Error("expected error for missing path")
 	}
 }
+
+func TestNewStatic_RejectsEmptyInstances(t *testing.T) {
+	c := baseConfig()
+	u := c.Upstreams["users"]
+	u.Instances = nil
+	c.Upstreams["users"] = u
+	if _, err := NewStatic(c); err == nil {
+		t.Error("expected error for empty instances list")
+	}
+}
+
+func TestNewStatic_RejectsUnknownLoadBalancer(t *testing.T) {
+	c := baseConfig()
+	u := c.Upstreams["users"]
+	u.LoadBalancer = "weighted"
+	c.Upstreams["users"] = u
+	if _, err := NewStatic(c); err == nil {
+		t.Error("expected error for unknown load balancer")
+	}
+}
+
+func TestNewStatic_RoundRobinPicksAcrossInstances(t *testing.T) {
+	c := baseConfig()
+	u := c.Upstreams["users"]
+	u.Instances = []string{"http://a:80", "http://b:80", "http://c:80"}
+	c.Upstreams["users"] = u
+	s, err := NewStatic(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := s.Routes()[0].Upstream
+	got := []string{up.Pick(), up.Pick(), up.Pick(), up.Pick()}
+	want := []string{"http://a:80", "http://b:80", "http://c:80", "http://a:80"}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("pick %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}

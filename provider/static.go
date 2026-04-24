@@ -25,10 +25,18 @@ func NewStatic(f *config.File) (*Static, error) {
 
 	upstreams := make(map[string]*Upstream, len(f.Upstreams))
 	for name, u := range f.Upstreams {
+		if len(u.Instances) == 0 {
+			return nil, fmt.Errorf("upstream %q: at least one instance is required", name)
+		}
+		instances := append([]string(nil), u.Instances...)
+		lb, err := newLoadBalancer(u.LoadBalancer, instances)
+		if err != nil {
+			return nil, fmt.Errorf("upstream %q: %w", name, err)
+		}
 		upstreams[name] = &Upstream{
 			Name:         u.Name,
 			Version:      u.Version,
-			Instances:    append([]string(nil), u.Instances...),
+			Instances:    instances,
 			LoadBalancer: u.LoadBalancer,
 			HealthCheck:  convertHealthCheck(u.HealthCheck),
 			Timeouts: Timeouts{
@@ -37,6 +45,7 @@ func NewStatic(f *config.File) (*Static, error) {
 				Overall:        u.Timeouts.Overall.AsDuration(),
 				Idle:           u.Timeouts.Idle.AsDuration(),
 			},
+			lb: lb,
 		}
 	}
 
