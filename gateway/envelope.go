@@ -163,6 +163,8 @@ func modifyResponseWithEnvelope(gateway, service string, start time.Time, maxByt
 
 		resp.Body = io.NopCloser(bytes.NewReader(out))
 		resp.ContentLength = int64(len(out))
+		resp.TransferEncoding = nil
+		resp.Header.Del("Transfer-Encoding")
 		resp.Header.Set("Content-Length", strconv.Itoa(len(out)))
 		resp.Header.Set("Content-Type", "application/json")
 		return nil
