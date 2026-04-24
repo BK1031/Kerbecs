@@ -1,8 +1,14 @@
 package admin
 
 import (
+	"context"
+	"crypto/subtle"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"kerbecs/config"
+	"kerbecs/utils"
+	"net/http"
 	"strings"
 	"time"
 
@@ -10,10 +16,40 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func StartServer() error {
-	router := SetupRouter()
-	InitializeRoutes(router)
-	return router.Run(":" + config.AdminPort)
+const shutdownTimeout = 30 * time.Second
+
+// Serve starts the admin HTTP listener and blocks until ctx is canceled, at
+// which point it drains in-flight requests up to shutdownTimeout.
+func Serve(ctx context.Context) error {
+	engine := SetupRouter()
+	InitializeRoutes(engine)
+	srv := &http.Server{
+		Addr:    ":" + config.AdminPort,
+		Handler: engine,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		utils.SugarLogger.Infof("admin listening on :%s", config.AdminPort)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		utils.SugarLogger.Infoln("admin: draining")
+		shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutCtx); err != nil {
+			return fmt.Errorf("admin shutdown: %w", err)
+		}
+		return nil
+	case err := <-errCh:
+		return err
+	}
 }
 
 func SetupRouter() *gin.Engine {
@@ -45,13 +81,21 @@ func AuthMiddleware() gin.HandlerFunc {
 				c.AbortWithStatusJSON(401, gin.H{"message": "Request not authorized"})
 				return
 			}
-			payload, _ := base64.StdEncoding.DecodeString(auth[1])
+			payload, err := base64.StdEncoding.DecodeString(auth[1])
+			if err != nil {
+				c.AbortWithStatusJSON(401, gin.H{"message": "Invalid credentials"})
+				return
+			}
 			pair := strings.SplitN(string(payload), ":", 2)
-			if len(pair) != 2 || pair[0] != config.KerbecsUser || pair[1] != config.KerbecsPassword {
+			if len(pair) != 2 || !constantTimeEqual(pair[0], config.KerbecsUser) || !constantTimeEqual(pair[1], config.KerbecsPassword) {
 				c.AbortWithStatusJSON(401, gin.H{"message": "Invalid credentials"})
 				return
 			}
 		}
 		c.Next()
 	}
+}
+
+func constantTimeEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }

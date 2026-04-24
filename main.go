@@ -1,17 +1,18 @@
 package main
 
 import (
+	"context"
 	"kerbecs/admin"
 	"kerbecs/config"
 	"kerbecs/gateway"
 	"kerbecs/provider"
 	"kerbecs/router"
 	"kerbecs/utils"
+	"os/signal"
+	"syscall"
 
 	"golang.org/x/sync/errgroup"
 )
-
-var eg errgroup.Group
 
 func main() {
 	config.PrintStartupBanner()
@@ -43,15 +44,17 @@ func main() {
 		GatewayVersion: firstNonEmpty(file.Gateway.Version, config.Version),
 	}
 
-	eg.Go(func() error {
-		return admin.StartServer()
-	})
-	eg.Go(func() error {
-		return gateway.StartServer(handlerCfg, rt)
-	})
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	var eg errgroup.Group
+	eg.Go(func() error { return admin.Serve(ctx) })
+	eg.Go(func() error { return gateway.Serve(ctx, handlerCfg, rt) })
+
 	if err := eg.Wait(); err != nil {
-		utils.SugarLogger.Fatalf("Failed to start servers: %v", err)
+		utils.SugarLogger.Fatalf("server error: %v", err)
 	}
+	utils.SugarLogger.Infoln("shutdown complete")
 }
 
 func firstNonEmpty(values ...string) string {

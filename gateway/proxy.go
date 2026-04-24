@@ -88,6 +88,7 @@ func ProxyResponseLogger() gin.HandlerFunc {
 // envelope, since the envelope is a property of a matched route.
 func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 	gateway := cfg.formattedGateway()
+	transports := buildTransportCache(rt)
 
 	return func(c *gin.Context) {
 		start := requestStart(c)
@@ -125,6 +126,9 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 		utils.SugarLogger.Infof("PROXY TO: %s @ %s%s", service, target.String(), c.Request.URL.Path)
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
+		if tr, ok := transports[up.Name]; ok {
+			proxy.Transport = tr
+		}
 		if match.Route.Envelope == provider.EnvelopeDefault {
 			proxy.ModifyResponse = modifyResponseWithEnvelope(gateway, service, start)
 		}

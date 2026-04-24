@@ -41,6 +41,25 @@ func New(providers ...provider.Provider) (*Router, error) {
 	return &Router{routes: compiledRoutes}, nil
 }
 
+// Upstreams returns each distinct upstream referenced by at least one route,
+// preserving first-occurrence order across providers.
+func (r *Router) Upstreams() []*provider.Upstream {
+	seen := map[string]bool{}
+	var out []*provider.Upstream
+	for _, c := range r.routes {
+		if c.route.Upstream == nil {
+			continue
+		}
+		name := c.route.Upstream.Name
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, c.route.Upstream)
+	}
+	return out
+}
+
 // Find returns the first matching route, or nil if none matches.
 func (r *Router) Find(method, host, path string) *Match {
 	for _, c := range r.routes {
