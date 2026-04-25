@@ -116,6 +116,59 @@ func TestNewStatic_RejectsUnknownLoadBalancer(t *testing.T) {
 	}
 }
 
+func TestNewStatic_TimeoutsResolution(t *testing.T) {
+	c := baseConfig()
+	c.Gateway.Timeouts = config.Timeouts{
+		Dial:    config.Duration(5 * time.Second),
+		Headers: config.Duration(30 * time.Second),
+		Overall: config.Duration(15 * time.Second),
+		Idle:    config.Duration(90 * time.Second),
+	}
+	u := c.Upstreams["users"]
+	u.Timeouts = config.Timeouts{
+		Headers: config.Duration(60 * time.Second), // override headers
+	}
+	c.Upstreams["users"] = u
+	c.Routes[0].Timeouts = &config.RouteTimeouts{
+		Overall: config.Duration(45 * time.Second), // override overall per-route
+	}
+
+	s, err := NewStatic(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := s.Routes()[0]
+
+	if got := r.Upstream.Timeouts.Dial; got != 5*time.Second {
+		t.Errorf("dial: got %v, want 5s (inherited from global)", got)
+	}
+	if got := r.Upstream.Timeouts.Headers; got != 60*time.Second {
+		t.Errorf("headers: got %v, want 60s (upstream override)", got)
+	}
+	if got := r.Upstream.Timeouts.Idle; got != 90*time.Second {
+		t.Errorf("idle: got %v, want 90s (inherited from global)", got)
+	}
+	if got := r.OverallTimeout; got != 45*time.Second {
+		t.Errorf("overall: got %v, want 45s (route override)", got)
+	}
+}
+
+func TestNewStatic_OverallFallsThroughToUpstream(t *testing.T) {
+	c := baseConfig()
+	u := c.Upstreams["users"]
+	u.Timeouts = config.Timeouts{Overall: config.Duration(20 * time.Second)}
+	c.Upstreams["users"] = u
+	// no per-route override
+
+	s, err := NewStatic(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Routes()[0].OverallTimeout; got != 20*time.Second {
+		t.Errorf("overall should inherit upstream value: got %v, want 20s", got)
+	}
+}
+
 func TestNewStatic_RoundRobinPicksAcrossInstances(t *testing.T) {
 	c := baseConfig()
 	u := c.Upstreams["users"]

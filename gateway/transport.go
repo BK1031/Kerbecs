@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// Default timeout values applied when an upstream does not specify its own.
-// These are conservative — they favor protecting the gateway over allowing
-// very slow upstreams.
+// Default timeout values applied when neither global, upstream, nor route
+// config sets one. These are conservative — they favor protecting the
+// gateway over allowing very slow upstreams.
 const (
-	defaultDialTimeout           = 5 * time.Second
-	defaultResponseHeaderTimeout = 30 * time.Second
-	defaultIdleConnTimeout       = 90 * time.Second
+	defaultDialTimeout    = 5 * time.Second
+	defaultHeadersTimeout = 30 * time.Second
+	defaultIdleConnTimeout = 90 * time.Second
 )
 
 // buildTransportCache returns a map from upstream name to a dedicated
@@ -35,7 +35,7 @@ func buildTransport(t provider.Timeouts) *http.Transport {
 	}
 	return &http.Transport{
 		DialContext:           dialer.DialContext,
-		ResponseHeaderTimeout: nonZero(t.ResponseHeader, defaultResponseHeaderTimeout),
+		ResponseHeaderTimeout: nonZero(t.Headers, defaultHeadersTimeout),
 		IdleConnTimeout:       nonZero(t.Idle, defaultIdleConnTimeout),
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   10,

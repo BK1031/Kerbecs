@@ -23,10 +23,11 @@ type File struct {
 }
 
 type GatewaySection struct {
-	Name    string `yaml:"name"`
-	Version string `yaml:"version"`
-	Env     string `yaml:"env"`
-	Limits  Limits `yaml:"limits"`
+	Name     string   `yaml:"name"`
+	Version  string   `yaml:"version"`
+	Env      string   `yaml:"env"`
+	Limits   Limits   `yaml:"limits"`
+	Timeouts Timeouts `yaml:"timeouts"`
 }
 
 // Limits caps the size of request and response bodies. At the gateway level
@@ -93,10 +94,17 @@ type HealthCheck struct {
 }
 
 type Timeouts struct {
-	Dial           Duration `yaml:"dial"`
-	ResponseHeader Duration `yaml:"response_header"`
-	Overall        Duration `yaml:"overall"`
-	Idle           Duration `yaml:"idle"`
+	Dial    Duration `yaml:"dial"`
+	Headers Duration `yaml:"headers"`
+	Overall Duration `yaml:"overall"`
+	Idle    Duration `yaml:"idle"`
+}
+
+// RouteTimeouts is the subset of Timeouts that can be overridden at the
+// route level. dial, headers, and idle are applied via the per-upstream
+// Transport so they live on the upstream; only overall is per-request.
+type RouteTimeouts struct {
+	Overall Duration `yaml:"overall,omitempty"`
 }
 
 // Middleware holds a middleware definition. The runtime is introduced in a
@@ -112,13 +120,14 @@ type Envelope struct {
 }
 
 type Route struct {
-	Name        string     `yaml:"name"`
-	Match       RouteMatch `yaml:"match"`
-	Upstream    string     `yaml:"upstream"`
-	Rewrite     *Rewrite   `yaml:"rewrite,omitempty"`
-	Envelope    string     `yaml:"envelope,omitempty"`
-	Middlewares []string   `yaml:"middlewares,omitempty"`
-	Limits      *Limits    `yaml:"limits,omitempty"`
+	Name        string         `yaml:"name"`
+	Match       RouteMatch     `yaml:"match"`
+	Upstream    string         `yaml:"upstream"`
+	Rewrite     *Rewrite       `yaml:"rewrite,omitempty"`
+	Envelope    string         `yaml:"envelope,omitempty"`
+	Middlewares []string       `yaml:"middlewares,omitempty"`
+	Limits      *Limits        `yaml:"limits,omitempty"`
+	Timeouts    *RouteTimeouts `yaml:"timeouts,omitempty"`
 }
 
 type RouteMatch struct {

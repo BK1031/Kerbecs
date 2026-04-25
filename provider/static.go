@@ -22,6 +22,7 @@ func NewStatic(f *config.File) (*Static, error) {
 		MaxRequestBytes:  nonZeroInt64(f.Gateway.Limits.MaxRequestBytes.Bytes(), defaultMaxRequestBytes),
 		MaxResponseBytes: nonZeroInt64(f.Gateway.Limits.MaxResponseBytes.Bytes(), defaultMaxResponseBytes),
 	}
+	globalTimeouts := timeoutsFromConfig(f.Gateway.Timeouts)
 
 	upstreams := make(map[string]*Upstream, len(f.Upstreams))
 	for name, u := range f.Upstreams {
@@ -39,13 +40,8 @@ func NewStatic(f *config.File) (*Static, error) {
 			Instances:    instances,
 			LoadBalancer: u.LoadBalancer,
 			HealthCheck:  convertHealthCheck(u.HealthCheck),
-			Timeouts: Timeouts{
-				Dial:           u.Timeouts.Dial.AsDuration(),
-				ResponseHeader: u.Timeouts.ResponseHeader.AsDuration(),
-				Overall:        u.Timeouts.Overall.AsDuration(),
-				Idle:           u.Timeouts.Idle.AsDuration(),
-			},
-			lb: lb,
+			Timeouts:     mergeTimeouts(globalTimeouts, timeoutsFromConfig(u.Timeouts)),
+			lb:           lb,
 		}
 	}
 
@@ -65,17 +61,53 @@ func NewStatic(f *config.File) (*Static, error) {
 		if r.Match.Path == "" {
 			return nil, fmt.Errorf("route %q: match.path is required", r.Name)
 		}
+		overall := up.Timeouts.Overall
+		if r.Timeouts != nil && r.Timeouts.Overall.AsDuration() > 0 {
+			overall = r.Timeouts.Overall.AsDuration()
+		}
 		routes = append(routes, Route{
-			Name:        r.Name,
-			Match:       RouteMatch{Path: r.Match.Path, Methods: append([]string(nil), r.Match.Methods...), Host: r.Match.Host},
-			Upstream:    up,
-			Rewrite:     convertRewrite(r.Rewrite),
-			Envelope:    env,
-			Limits:      mergeLimits(globalLimits, r.Limits),
-			Middlewares: append([]string(nil), r.Middlewares...),
+			Name:           r.Name,
+			Match:          RouteMatch{Path: r.Match.Path, Methods: append([]string(nil), r.Match.Methods...), Host: r.Match.Host},
+			Upstream:       up,
+			Rewrite:        convertRewrite(r.Rewrite),
+			Envelope:       env,
+			Limits:         mergeLimits(globalLimits, r.Limits),
+			OverallTimeout: overall,
+			Middlewares:    append([]string(nil), r.Middlewares...),
 		})
 	}
 	return &Static{routes: routes}, nil
+}
+
+// timeoutsFromConfig converts a config.Timeouts (Duration wrappers) into a
+// runtime Timeouts (time.Duration). Zero values pass through unchanged so
+// the merge function can detect "unset" and fall through to the next layer.
+func timeoutsFromConfig(t config.Timeouts) Timeouts {
+	return Timeouts{
+		Dial:    t.Dial.AsDuration(),
+		Headers: t.Headers.AsDuration(),
+		Overall: t.Overall.AsDuration(),
+		Idle:    t.Idle.AsDuration(),
+	}
+}
+
+// mergeTimeouts overlays override on top of base. A zero field in override
+// means "inherit from base".
+func mergeTimeouts(base, override Timeouts) Timeouts {
+	out := base
+	if override.Dial > 0 {
+		out.Dial = override.Dial
+	}
+	if override.Headers > 0 {
+		out.Headers = override.Headers
+	}
+	if override.Overall > 0 {
+		out.Overall = override.Overall
+	}
+	if override.Idle > 0 {
+		out.Idle = override.Idle
+	}
+	return out
 }
 
 func mergeLimits(global Limits, override *config.Limits) Limits {

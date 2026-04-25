@@ -13,15 +13,17 @@ type Provider interface {
 }
 
 // Route is the runtime shape of a routing rule. Upstream is a resolved pointer
-// to avoid name lookups in the hot path.
+// to avoid name lookups in the hot path. OverallTimeout is resolved per-route
+// from route override > upstream > global > 0 (no deadline).
 type Route struct {
-	Name        string
-	Match       RouteMatch
-	Upstream    *Upstream
-	Rewrite     *Rewrite
-	Envelope    EnvelopeMode
-	Limits      Limits
-	Middlewares []string
+	Name           string
+	Match          RouteMatch
+	Upstream       *Upstream
+	Rewrite        *Rewrite
+	Envelope       EnvelopeMode
+	Limits         Limits
+	OverallTimeout time.Duration
+	Middlewares    []string
 }
 
 // Limits are the fully-resolved byte caps for a route (global default merged
@@ -80,8 +82,8 @@ type HealthCheck struct {
 }
 
 type Timeouts struct {
-	Dial           time.Duration
-	ResponseHeader time.Duration
-	Overall        time.Duration
-	Idle           time.Duration
+	Dial    time.Duration
+	Headers time.Duration
+	Overall time.Duration
+	Idle    time.Duration
 }

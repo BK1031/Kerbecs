@@ -1,11 +1,12 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"kerbecs/pkg/logger"
 	"kerbecs/provider"
 	"kerbecs/router"
-	"kerbecs/pkg/logger"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -122,6 +123,15 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 			c.Request.URL.RawPath = ""
 		}
 
+		// Per-request "overall" deadline. Skipped for WebSocket upgrades since
+		// they're long-lived by design. Streaming routes (SSE, downloads)
+		// should configure overall: 0 to opt out.
+		if to := match.Route.OverallTimeout; to > 0 && !isWebSocketUpgrade(c.Request) {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), to)
+			defer cancel()
+			c.Request = c.Request.WithContext(ctx)
+		}
+
 		logger.SugarLogger.Infof("PROXY TO: %s @ %s%s", service, target.String(), c.Request.URL.Path)
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
@@ -139,7 +149,8 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 }
 
 // handleProxyError translates a reverse-proxy error into a terminal response.
-// Size-cap violations get their own status codes; everything else is 502.
+// Size-cap and timeout violations get their own status codes; everything
+// else is 502.
 func handleProxyError(w http.ResponseWriter, mode provider.EnvelopeMode, gateway, service string, start time.Time, upstream string, err error) {
 	var maxBytes *http.MaxBytesError
 	if errors.As(err, &maxBytes) {
@@ -154,9 +165,19 @@ func handleProxyError(w http.ResponseWriter, mode provider.EnvelopeMode, gateway
 			"upstream response exceeds max_response_bytes")
 		return
 	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		logger.SugarLogger.Warnf("upstream %q request exceeded overall timeout", upstream)
+		writeRawError(w, mode, http.StatusGatewayTimeout, gateway, service, start,
+			"request exceeded overall timeout")
+		return
+	}
 	logger.SugarLogger.Errorf("failed to reach upstream %q: %v", upstream, err)
 	writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
 		"upstream unreachable: "+upstream+": "+err.Error())
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
 // writeError emits an error response via gin.Context, enveloped if the route
