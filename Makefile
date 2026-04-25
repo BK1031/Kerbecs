@@ -3,13 +3,11 @@
 clean:
 	go clean
 	go mod tidy
-	rm *.out
-	rm coverage.html
+	rm -f coverage.out coverage.html
 
 run:
 	chmod +x scripts/run.sh
 	./scripts/run.sh
 
 test:
-	chmod +x scripts/test.sh
-	./scripts/test.sh
+	go test -race ./...

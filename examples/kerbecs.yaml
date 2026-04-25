@@ -1,0 +1,70 @@
+gateway:
+  name: kerbecs-edge
+  version: 3.0.0
+  env: ${ENV:DEV}
+  limits:
+    max_request_bytes: 100MB
+    max_response_bytes: 100MB
+  timeouts:                    # global defaults; upstreams and routes can override
+    dial: 5s
+    headers: 30s
+    idle: 90s
+    overall: 0                 # 0 = no overall deadline; set per-route when needed
+
+listeners:
+  gateway:
+    port: ${PORT:10310}
+    # cors:
+    #   enabled: true
+    #   allowed_origins: [https://app.example.com]
+    #   allow_credentials: true
+  admin:
+    port: ${ADMIN_PORT:10300}
+    auth:
+      type: basic
+      username: ${KERBECS_USER:admin}
+      password: ${KERBECS_PASSWORD:admin}
+
+providers:
+  static:
+    watch: false
+
+upstreams:
+  users-service:
+    name: users
+    version: 1.0.0
+    instances:
+      - http://localhost:8081
+      - http://localhost:8082
+      - http://localhost:8083
+    load_balancer: round_robin   # round_robin (default) | random
+    timeouts:                    # upstream override of global defaults
+      dial: 2s
+      headers: 5s
+      idle: 50s                  # ALB-friendly
+
+  echo-service:
+    name: echo
+    version: 1.0.0
+    instances:
+      - http://localhost:8082
+
+routes:
+  - name: users-api
+    match:
+      path: /users/*
+      methods: [GET, POST, PUT, DELETE]
+    upstream: users-service
+    envelope: default
+    timeouts:
+      overall: 10s             # route-level override; only `overall` is route-scoped
+
+  - name: echo-passthrough
+    match:
+      path: /echo/*
+    upstream: echo-service
+    rewrite:
+      strip_prefix: /echo
+    envelope: passthrough
+    limits:
+      max_request_bytes: 10KB   # tight per-route override for demo

@@ -1,14 +1,10 @@
-package utils
+package logger
 
-import (
-	"kerbecs/config"
-	"testing"
-)
+import "testing"
 
-func TestInitializeLogger(t *testing.T) {
-	t.Run("Logger Test 1", func(t *testing.T) {
-		config.Env = "DEV"
-		InitializeLogger()
+func TestInit(t *testing.T) {
+	t.Run("development", func(t *testing.T) {
+		Init(false)
 		if Logger == nil {
 			t.Error("Expected Logger to not be nil")
 		}
@@ -16,9 +12,8 @@ func TestInitializeLogger(t *testing.T) {
 			t.Error("Expected SugarLogger to not be nil")
 		}
 	})
-	t.Run("Logger Test 2", func(t *testing.T) {
-		config.Env = "PROD"
-		InitializeLogger()
+	t.Run("production", func(t *testing.T) {
+		Init(true)
 		if Logger == nil {
 			t.Error("Expected Logger to not be nil")
 		}

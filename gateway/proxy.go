@@ -1,16 +1,15 @@
 package gateway
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	"io"
-	"kerbecs/config"
-	"kerbecs/model"
-	"kerbecs/utils"
+	"errors"
+	"kerbecs/pkg/logger"
+	"kerbecs/provider"
+	"kerbecs/router"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,26 +17,29 @@ import (
 	"github.com/google/uuid"
 )
 
+// HandlerConfig carries the gateway-level identity that feeds the envelope.
+type HandlerConfig struct {
+	GatewayName    string
+	GatewayVersion string
+}
+
+func (h HandlerConfig) formattedGateway() string {
+	return h.GatewayName + ":v" + h.GatewayVersion
+}
+
 func ProxyRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID, _ := uuid.NewV7()
 		c.Set("Request-ID", requestID.String())
 		c.Set("Request-Start-Time", time.Now())
-		utils.SugarLogger.Infoln("-------------------------------------------------------------------")
-		utils.SugarLogger.Infoln(time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
-		utils.SugarLogger.Infoln("REQUEST ID: " + requestID.String())
-		utils.SugarLogger.Infoln("REQUEST ROUTE: " + c.Request.Host + c.Request.URL.String() + " [" + c.Request.Method + "]")
-		bodyBytes, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			utils.SugarLogger.Infoln("REQUEST BODY: " + err.Error())
-		} else {
-			utils.SugarLogger.Infoln("REQUEST BODY: " + string(bodyBytes))
-		}
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-		utils.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
+		logger.SugarLogger.Infoln("-------------------------------------------------------------------")
+		logger.SugarLogger.Infoln(time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
+		logger.SugarLogger.Infoln("REQUEST ID: " + requestID.String())
+		logger.SugarLogger.Infoln("REQUEST ROUTE: " + c.Request.Host + c.Request.URL.String() + " [" + c.Request.Method + "]")
+		logger.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
 		c.Request.Header.Set("Request-ID", requestID.String())
 		if strings.ToLower(c.GetHeader("Upgrade")) != "" {
-			utils.SugarLogger.Infoln("UPGRADE: " + c.GetHeader("Upgrade"))
+			logger.SugarLogger.Infoln("UPGRADE: " + c.GetHeader("Upgrade"))
 		}
 		c.Next()
 	}
@@ -53,86 +55,173 @@ func ProxyResponseLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime, _ := c.Get("Request-Start-Time")
 		c.Next()
-		duration := time.Since(startTime.(time.Time)).Milliseconds()
+
+		var duration int64
+		if t, ok := startTime.(time.Time); ok {
+			duration = time.Since(t).Milliseconds()
+		}
 
 		status := c.Writer.Status()
 		isWebSocket := strings.ToLower(c.GetHeader("Upgrade")) == "websocket"
 
 		if isWebSocket {
-			utils.SugarLogger.Infof("WS STATUS: %d – took %dms", status, duration)
+			logger.SugarLogger.Infof("WS STATUS: %d – took %dms", status, duration)
 		} else {
-			utils.SugarLogger.Infof("RESPONSE STATUS: %d – took %dms", status, duration)
+			logger.SugarLogger.Infof("RESPONSE STATUS: %d – took %dms", status, duration)
 		}
 	}
 }
 
-func ProxyHandler(c *gin.Context) {
-	startTime, _ := c.Get("Request-Start-Time")
-	service, err := config.RinconClient.MatchRoute(c.Request.URL.Path, c.Request.Method)
-	if err != nil {
-		c.JSON(404, model.Response{
-			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-			Data:      json.RawMessage("{\"message\": \"No service to handle route: " + c.Request.URL.String() + "\"}"),
-		})
-		return
-	}
-	utils.SugarLogger.Infoln("PROXY TO: (" + strconv.Itoa(service.ID) + ") " + service.Name + " @ " + service.Endpoint)
-	endpoint, err := url.Parse(service.Endpoint)
-	if err != nil {
-		c.JSON(500, model.Response{
-			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   config.RinconClient.Rincon().FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
-			Data:      json.RawMessage("{\"message\": \"Failed to parse service endpoint: " + service.Endpoint + "\"}"),
-		})
-		return
-	}
+// NewProxyHandler returns a gin handler that resolves routes via the given
+// router and proxies matched requests to the route's upstream. If the matched
+// route has envelope: default, the upstream response is buffered and wrapped
+// in the Kerbecs envelope. passthrough routes stream unchanged.
+//
+// Pre-match errors (no route found) are returned as plain JSON without an
+// envelope, since the envelope is a property of a matched route.
+func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
+	gateway := cfg.formattedGateway()
+	transports := buildTransportCache(rt)
 
-	proxy := httputil.NewSingleHostReverseProxy(endpoint)
-	proxy.ModifyResponse = func(response *http.Response) error {
-		contentType := response.Header.Get("Content-Type")
-		// Don't modify file downloads, just stream as-is
-		if strings.HasPrefix(contentType, "application/octet-stream") ||
-			strings.HasPrefix(contentType, "text/csv") ||
-			strings.HasPrefix(contentType, "application/zip") ||
-			strings.HasPrefix(contentType, "application/pdf") {
-			return nil
+	return func(c *gin.Context) {
+		start := requestStart(c)
+
+		match := rt.Find(c.Request.Method, c.Request.Host, c.Request.URL.Path)
+		if match == nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No route configured for " + c.Request.Method + " " + c.Request.URL.String(),
+			})
+			return
 		}
-		// Don't modify WebSocket upgrades, leave it untouched!
-		if response.StatusCode == http.StatusSwitchingProtocols {
-			return nil
+
+		up := match.Route.Upstream
+		service := up.FormattedNameWithVersion()
+		limits := match.Route.Limits
+
+		// Request body cap — reject up front when Content-Length is known.
+		if limits.MaxRequestBytes > 0 && c.Request.ContentLength > limits.MaxRequestBytes {
+			writeError(c, match.Route.Envelope, http.StatusRequestEntityTooLarge, gateway, service, start,
+				"request body exceeds max_request_bytes")
+			return
 		}
-		respModel, err := BuildResponseStruct(response, *service)
+		// Wrap for streaming uploads where Content-Length is unknown or spoofed.
+		if limits.MaxRequestBytes > 0 && c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limits.MaxRequestBytes)
+		}
+
+		instance := up.Pick()
+		target, err := url.Parse(instance)
 		if err != nil {
-			return err
+			logger.SugarLogger.Errorf("upstream %q: invalid endpoint %q: %v", up.Name, instance, err)
+			writeError(c, match.Route.Envelope, http.StatusInternalServerError, gateway, service, start,
+				"Invalid upstream endpoint for "+up.Name)
+			return
 		}
-		respModel.Timestamp = time.Now().Format("Mon Jan 02 15:04:05 MST 2006")
-		respModel.Ping = strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms"
-		b, _ := json.Marshal(respModel)
-		response.Body = io.NopCloser(bytes.NewReader(b))
-		response.ContentLength = int64(len(b))
-		response.Header.Set("Content-Length", strconv.Itoa(len(b)))
-		return nil
-	}
-	proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, err error) {
-		utils.SugarLogger.Errorln("Failed to proxy request: " + err.Error())
-		writer.WriteHeader(http.StatusBadGateway)
-		respModel := model.Response{
-			Status:    "ERROR",
-			Ping:      strconv.FormatInt(time.Since(startTime.(time.Time)).Milliseconds(), 10) + "ms",
-			Gateway:   config.Service.FormattedNameWithVersion(),
-			Service:   service.FormattedNameWithVersion(),
-			Timestamp: time.Now().Format("Mon Jan 02 15:04:05 MST 2006"),
+
+		if match.Route.Rewrite != nil {
+			c.Request.URL.Path = router.RewritePath(c.Request.URL.Path, match.Route.Rewrite)
+			c.Request.URL.RawPath = ""
 		}
-		respModel.Data = json.RawMessage("{\"message\": \"Failed to reach " + service.Name + ": " + err.Error() + "\"}")
-		b, _ := json.Marshal(respModel)
-		writer.Write(b)
+
+		// Per-request "overall" deadline. Skipped for WebSocket upgrades since
+		// they're long-lived by design. Streaming routes (SSE, downloads)
+		// should configure overall: 0 to opt out.
+		if to := match.Route.OverallTimeout; to > 0 && !isWebSocketUpgrade(c.Request) {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), to)
+			defer cancel()
+			c.Request = c.Request.WithContext(ctx)
+		}
+
+		logger.SugarLogger.Infof("PROXY TO: %s @ %s%s", service, target.String(), c.Request.URL.Path)
+
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		if tr, ok := transports[up.Name]; ok {
+			proxy.Transport = tr
+		}
+		if match.Route.Envelope == provider.EnvelopeDefault {
+			proxy.ModifyResponse = modifyResponseWithEnvelope(gateway, service, start, limits.MaxResponseBytes)
+		}
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			handleProxyError(w, match.Route.Envelope, gateway, service, start, up.Name, err)
+		}
+		proxy.ServeHTTP(c.Writer, c.Request)
 	}
-	proxy.ServeHTTP(c.Writer, c.Request)
+}
+
+// handleProxyError translates a reverse-proxy error into a terminal response.
+// Size-cap and timeout violations get their own status codes; everything
+// else is 502.
+func handleProxyError(w http.ResponseWriter, mode provider.EnvelopeMode, gateway, service string, start time.Time, upstream string, err error) {
+	var maxBytes *http.MaxBytesError
+	if errors.As(err, &maxBytes) {
+		logger.SugarLogger.Warnf("request from client to %q exceeded max_request_bytes (limit %d)", upstream, maxBytes.Limit)
+		writeRawError(w, mode, http.StatusRequestEntityTooLarge, gateway, service, start,
+			"request body exceeds max_request_bytes")
+		return
+	}
+	if errors.Is(err, errResponseTooLarge) {
+		logger.SugarLogger.Warnf("upstream %q response exceeded max_response_bytes", upstream)
+		writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
+			"upstream response exceeds max_response_bytes")
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		logger.SugarLogger.Warnf("upstream %q request exceeded overall timeout", upstream)
+		writeRawError(w, mode, http.StatusGatewayTimeout, gateway, service, start,
+			"request exceeded overall timeout")
+		return
+	}
+	logger.SugarLogger.Errorf("failed to reach upstream %q: %v", upstream, err)
+	writeRawError(w, mode, http.StatusBadGateway, gateway, service, start,
+		"upstream unreachable: "+upstream+": "+err.Error())
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+}
+
+// writeError emits an error response via gin.Context, enveloped if the route
+// requested it.
+func writeError(c *gin.Context, mode provider.EnvelopeMode, code int, gateway, service string, start time.Time, message string) {
+	if mode == provider.EnvelopeDefault {
+		body, err := envelopeFromMessage(code, gateway, service, start, message)
+		if err != nil {
+			c.JSON(code, gin.H{"message": message})
+			return
+		}
+		c.Data(code, "application/json", body)
+		return
+	}
+	c.JSON(code, gin.H{"message": message})
+}
+
+// writeRawError is the ResponseWriter equivalent of writeError, used from
+// inside ReverseProxy hooks where gin.Context is no longer applicable.
+func writeRawError(w http.ResponseWriter, mode provider.EnvelopeMode, code int, gateway, service string, start time.Time, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+
+	if mode == provider.EnvelopeDefault {
+		body, err := envelopeFromMessage(code, gateway, service, start, message)
+		if err == nil {
+			_, _ = w.Write(body)
+			return
+		}
+	}
+	if fallback, err := json.Marshal(map[string]string{"message": message}); err == nil {
+		_, _ = w.Write(fallback)
+	} else {
+		_, _ = w.Write([]byte(`{"message":"internal marshal error"}`))
+	}
+}
+
+// requestStart returns the start time set by ProxyRequestLogger, falling back
+// to now() if the middleware was not wired.
+func requestStart(c *gin.Context) time.Time {
+	if v, ok := c.Get("Request-Start-Time"); ok {
+		if t, ok := v.(time.Time); ok {
+			return t
+		}
+	}
+	return time.Now()
 }

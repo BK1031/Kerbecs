@@ -1,0 +1,27 @@
+# Minimal config: smallest YAML that boots Kerbecs and proxies one route.
+# Defaults fill in everything else (ports, timeouts, limits, env).
+
+gateway:
+  name: kerbecs
+  version: 3.0.0
+
+listeners:
+  gateway: { port: "10310" }
+  admin:
+    port: "10300"
+    auth: { type: basic, username: admin, password: admin }
+
+providers:
+  static: { watch: false }
+
+upstreams:
+  api:
+    name: api
+    version: 1.0.0
+    instances: [http://localhost:8080]
+
+routes:
+  - name: catchall
+    match: { path: /* }
+    upstream: api
+    envelope: passthrough

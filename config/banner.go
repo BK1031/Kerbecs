@@ -11,10 +11,10 @@ var Banner = `
 ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝╚══════╝
 `
 
-func PrintStartupBanner() {
+func PrintStartupBanner(env string) {
 	banner := color.New(color.Bold, color.FgHiBlue).PrintlnFunc()
 	banner(Banner)
 	version := color.New(color.Bold, color.FgBlue).PrintlnFunc()
-	version("Running v" + Service.Version + " [ENV: " + Env + "]")
+	version("Running v" + Version + " [ENV: " + env + "]")
 	println()
 }

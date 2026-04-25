@@ -8,6 +8,6 @@ import (
 
 func Ping(c *gin.Context) {
 	c.JSON(200, gin.H{
-		"message": "Kerbecs v" + config.Service.Version + " is online!",
+		"message": config.Name + " v" + config.Version + " is online!",
 	})
 }
