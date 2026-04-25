@@ -63,6 +63,8 @@ jobs:
             type=image,name=docker.io/bk1031/kerbecs,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=build-${{ steps.platform.outputs.pair }}
           cache-to: type=gha,scope=build-${{ steps.platform.outputs.pair }},mode=max
+          provenance: false
+          sbom: false
 
       - name: Export digest
         run: |
