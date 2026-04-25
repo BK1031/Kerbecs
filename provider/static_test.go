@@ -2,20 +2,9 @@ package provider
 
 import (
 	"kerbecs/config"
-	"kerbecs/pkg/middleware"
 	"testing"
 	"time"
 )
-
-// emptyRegistry returns a middleware registry with nothing in it; route
-// configs in these tests don't reference any middlewares.
-func emptyRegistry() *middleware.Registry {
-	r, err := middleware.BuildRegistry(nil)
-	if err != nil {
-		panic(err)
-	}
-	return r
-}
 
 func baseConfig() *config.File {
 	return &config.File{
@@ -39,7 +28,7 @@ func baseConfig() *config.File {
 }
 
 func TestNewStatic_Resolves(t *testing.T) {
-	s, err := NewStatic(baseConfig(), emptyRegistry())
+	s, err := NewStatic(baseConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +51,7 @@ func TestNewStatic_Resolves(t *testing.T) {
 func TestNewStatic_UnknownUpstream(t *testing.T) {
 	c := baseConfig()
 	c.Routes[0].Upstream = "ghost"
-	if _, err := NewStatic(c, emptyRegistry()); err == nil {
+	if _, err := NewStatic(c); err == nil {
 		t.Error("expected error for unknown upstream")
 	}
 }
@@ -70,7 +59,7 @@ func TestNewStatic_UnknownUpstream(t *testing.T) {
 func TestNewStatic_UnknownEnvelope(t *testing.T) {
 	c := baseConfig()
 	c.Routes[0].Envelope = "my-custom"
-	if _, err := NewStatic(c, emptyRegistry()); err == nil {
+	if _, err := NewStatic(c); err == nil {
 		t.Error("expected error for unknown envelope")
 	}
 }
@@ -78,7 +67,7 @@ func TestNewStatic_UnknownEnvelope(t *testing.T) {
 func TestNewStatic_EnvelopeDefaults(t *testing.T) {
 	c := baseConfig()
 	c.Routes[0].Envelope = ""
-	s, err := NewStatic(c, emptyRegistry())
+	s, err := NewStatic(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +79,7 @@ func TestNewStatic_EnvelopeDefaults(t *testing.T) {
 func TestNewStatic_Passthrough(t *testing.T) {
 	c := baseConfig()
 	c.Routes[0].Envelope = "passthrough"
-	s, err := NewStatic(c, emptyRegistry())
+	s, err := NewStatic(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +91,7 @@ func TestNewStatic_Passthrough(t *testing.T) {
 func TestNewStatic_MissingPath(t *testing.T) {
 	c := baseConfig()
 	c.Routes[0].Match.Path = ""
-	if _, err := NewStatic(c, emptyRegistry()); err == nil {
+	if _, err := NewStatic(c); err == nil {
 		t.Error("expected error for missing path")
 	}
 }
@@ -112,7 +101,7 @@ func TestNewStatic_RejectsEmptyInstances(t *testing.T) {
 	u := c.Upstreams["users"]
 	u.Instances = nil
 	c.Upstreams["users"] = u
-	if _, err := NewStatic(c, emptyRegistry()); err == nil {
+	if _, err := NewStatic(c); err == nil {
 		t.Error("expected error for empty instances list")
 	}
 }
@@ -122,7 +111,7 @@ func TestNewStatic_RejectsUnknownLoadBalancer(t *testing.T) {
 	u := c.Upstreams["users"]
 	u.LoadBalancer = "weighted"
 	c.Upstreams["users"] = u
-	if _, err := NewStatic(c, emptyRegistry()); err == nil {
+	if _, err := NewStatic(c); err == nil {
 		t.Error("expected error for unknown load balancer")
 	}
 }
@@ -132,7 +121,7 @@ func TestNewStatic_RoundRobinPicksAcrossInstances(t *testing.T) {
 	u := c.Upstreams["users"]
 	u.Instances = []string{"http://a:80", "http://b:80", "http://c:80"}
 	c.Upstreams["users"] = u
-	s, err := NewStatic(c, emptyRegistry())
+	s, err := NewStatic(c)
 	if err != nil {
 		t.Fatal(err)
 	}

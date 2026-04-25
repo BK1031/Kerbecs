@@ -42,16 +42,14 @@ type ListenersSection struct {
 }
 
 type GatewayListener struct {
-	Port        string      `yaml:"port"`
-	CORS        *CORSConfig `yaml:"cors,omitempty"`
-	Middlewares []string    `yaml:"middlewares,omitempty"`
+	Port string     `yaml:"port"`
+	CORS *CORSConfig `yaml:"cors,omitempty"`
 }
 
 type AdminListener struct {
-	Port        string      `yaml:"port"`
-	Auth        AdminAuth   `yaml:"auth"`
-	CORS        *CORSConfig `yaml:"cors,omitempty"`
-	Middlewares []string    `yaml:"middlewares,omitempty"`
+	Port string      `yaml:"port"`
+	Auth AdminAuth   `yaml:"auth"`
+	CORS *CORSConfig `yaml:"cors,omitempty"`
 }
 
 type AdminAuth struct {
@@ -101,30 +99,11 @@ type Timeouts struct {
 	Idle           Duration `yaml:"idle"`
 }
 
-// Middleware holds a named middleware definition. UnmarshalYAML captures the
-// full node so each middleware factory can decode its own typed config block,
-// rather than fishing through map[string]any.
+// Middleware holds a middleware definition. The runtime is introduced in a
+// later phase; for now we keep the type loose.
 type Middleware struct {
-	Type string
-	raw  yaml.Node
-}
-
-func (m *Middleware) UnmarshalYAML(value *yaml.Node) error {
-	m.raw = *value
-	var stub struct {
-		Type string `yaml:"type"`
-	}
-	if err := value.Decode(&stub); err != nil {
-		return err
-	}
-	m.Type = stub.Type
-	return nil
-}
-
-// Decode the full middleware config (including type-specific fields) into v.
-// Factories receive this as a bound method.
-func (m *Middleware) Decode(v any) error {
-	return m.raw.Decode(v)
+	Type   string         `yaml:"type"`
+	Config map[string]any `yaml:",inline"`
 }
 
 type Envelope struct {

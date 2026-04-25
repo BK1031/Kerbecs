@@ -20,10 +20,9 @@ const shutdownTimeout = 30 * time.Second
 // config file (transport concerns). Envelope identity flows through
 // HandlerConfig.
 type ListenerConfig struct {
-	Port        string
-	Env         string
-	CORS        *config.CORSConfig
-	Middlewares []gin.HandlerFunc
+	Port string
+	Env  string
+	CORS *config.CORSConfig
 }
 
 // Serve starts the gateway HTTP listener and blocks until ctx is canceled, at
@@ -65,9 +64,6 @@ func SetupRouter(listener ListenerConfig, handler HandlerConfig, rt *router.Rout
 	r := gin.Default()
 	if listener.CORS != nil && listener.CORS.Enabled {
 		r.Use(cors.New(buildCORSConfig(listener.CORS)))
-	}
-	for _, mw := range listener.Middlewares {
-		r.Use(mw)
 	}
 	r.Use(ProxyRequestLogger())
 	r.Use(ProxyAuthMiddleware())

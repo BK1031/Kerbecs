@@ -13,7 +13,6 @@ listeners:
     #   enabled: true
     #   allowed_origins: [https://app.example.com]
     #   allow_credentials: true
-    middlewares: [req-id]
   admin:
     port: ${ADMIN_PORT:10300}
     auth:
@@ -24,20 +23,6 @@ listeners:
 providers:
   static:
     watch: false
-
-middlewares:
-  req-id:
-    type: request_id
-    header: X-Request-Id
-    trust_incoming: false
-
-  strip-internal:
-    type: headers
-    request:
-      remove: [X-Internal-Trace]
-    response:
-      add:
-        X-Gateway: kerbecs
 
 upstreams:
   users-service:
@@ -75,6 +60,5 @@ routes:
     rewrite:
       strip_prefix: /echo
     envelope: passthrough
-    middlewares: [strip-internal]
     limits:
       max_request_bytes: 10KB   # tight per-route override for demo

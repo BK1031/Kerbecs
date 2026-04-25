@@ -6,7 +6,6 @@ import (
 	"kerbecs/config"
 	"kerbecs/gateway"
 	"kerbecs/pkg/logger"
-	"kerbecs/pkg/middleware"
 	"kerbecs/provider"
 	"kerbecs/router"
 	"os"
@@ -17,10 +16,11 @@ import (
 )
 
 func main() {
+	// Bootstrap the logger from the ENV variable so config-load errors below
+	// can be reported before the YAML is parsed. Once the file is loaded,
+	// file.Gateway.Env is the authoritative source for everything else.
 	logger.Init(os.Getenv("ENV") == "PROD")
 	defer logger.Logger.Sync()
-
-	middleware.RegisterBuiltins()
 
 	path := config.FilePath()
 	file, err := config.LoadFile(path)
@@ -34,12 +34,7 @@ func main() {
 
 	config.PrintStartupBanner(file.Gateway.Env)
 
-	mwRegistry, err := middleware.BuildRegistry(file.Middlewares)
-	if err != nil {
-		logger.SugarLogger.Fatalf("Failed to build middleware registry: %v", err)
-	}
-
-	static, err := provider.NewStatic(file, mwRegistry)
+	static, err := provider.NewStatic(file)
 	if err != nil {
 		logger.SugarLogger.Fatalf("Failed to build static provider: %v", err)
 	}
@@ -50,20 +45,14 @@ func main() {
 		logger.SugarLogger.Fatalf("Failed to build router: %v", err)
 	}
 
-	gatewayChain, err := mwRegistry.Chain(file.Listeners.Gateway.Middlewares)
-	if err != nil {
-		logger.SugarLogger.Fatalf("Failed to build gateway listener middleware chain: %v", err)
-	}
-
 	handlerCfg := gateway.HandlerConfig{
 		GatewayName:    firstNonEmpty(file.Gateway.Name, config.Name),
 		GatewayVersion: firstNonEmpty(file.Gateway.Version, config.Version),
 	}
 	listenerCfg := gateway.ListenerConfig{
-		Port:        file.Listeners.Gateway.Port,
-		Env:         file.Gateway.Env,
-		CORS:        file.Listeners.Gateway.CORS,
-		Middlewares: gatewayChain,
+		Port: file.Listeners.Gateway.Port,
+		Env:  file.Gateway.Env,
+		CORS: file.Listeners.Gateway.CORS,
 	}
 	adminCfg := admin.Config{
 		Port:     file.Listeners.Admin.Port,

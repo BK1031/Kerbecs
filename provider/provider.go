@@ -1,10 +1,6 @@
 package provider
 
-import (
-	"time"
-
-	"github.com/gin-gonic/gin"
-)
+import "time"
 
 // Provider is a source of routes. A StaticProvider reads from a config file;
 // future providers (Rincon, Docker, Kubernetes) will read from elsewhere.
@@ -17,8 +13,7 @@ type Provider interface {
 }
 
 // Route is the runtime shape of a routing rule. Upstream is a resolved pointer
-// to avoid name lookups in the hot path. Middlewares is a slice of resolved
-// gin handlers in the order they should run.
+// to avoid name lookups in the hot path.
 type Route struct {
 	Name        string
 	Match       RouteMatch
@@ -26,7 +21,7 @@ type Route struct {
 	Rewrite     *Rewrite
 	Envelope    EnvelopeMode
 	Limits      Limits
-	Middlewares []gin.HandlerFunc
+	Middlewares []string
 }
 
 // Limits are the fully-resolved byte caps for a route (global default merged
