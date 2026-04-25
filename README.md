@@ -3,7 +3,6 @@
 <img align="right" width="159px" src="assets/kerbecs.png" alt="kerbecs-logo">
 
 [![Build Status](https://github.com/BK1031/Kerbecs/actions/workflows/test.yml/badge.svg)](https://github.com/BK1031/Kerbecs/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/BK1031/Kerbecs/graph/badge.svg?token=R4NMABYGOZ)](https://codecov.io/gh/BK1031/Kerbecs)
 [![GoDoc](https://pkg.go.dev/badge/github.com/bk1031/kerbecs?status.svg)](https://pkg.go.dev/github.com/bk1031/kerbecs?tab=doc)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bk1031/kerbecs?style=flat-square)](https://hub.docker.com/repository/docker/bk1031/kerbecs)
 [![Release](https://img.shields.io/github/release/bk1031/kerbecs.svg?style=flat-square)](https://github.com/bk1031/kerbecs/releases)
@@ -276,6 +275,17 @@ actually references them.
 - **Non-static providers** (service registry, Docker labels, Kubernetes
   ingress).
 
+## Contributing
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+Don't forget to give the project a star! Thanks again!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b gh-username/my-amazing-feature`)
+3. Commit your Changes (`git commit -m 'Add my amazing feature'`)
+4. Push to the Branch (`git push origin gh-username/my-amazing-feature`)
+5. Open a Pull Request
+
 ## License
 
-MIT.
+Distributed under the MIT License. See `LICENSE.txt` for more information.
