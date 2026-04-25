@@ -1,29 +1,28 @@
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine3.21 AS builder
-
-RUN apk --no-cache add ca-certificates
-RUN apk add --no-cache tzdata
+# syntax=docker/dockerfile:1.7
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.21 AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . ./
+COPY . .
+
 ARG TARGETOS
 ARG TARGETARCH
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /kerbecs
+ENV CGO_ENABLED=0
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o /kerbecs
 
-##
-## Deploy
-##
-FROM alpine:3.19
+FROM gcr.io/distroless/static-debian12:nonroot
 
-WORKDIR /
+LABEL org.opencontainers.image.source="https://github.com/BK1031/Kerbecs" \
+      org.opencontainers.image.description="Kerbecs API Gateway" \
+      org.opencontainers.image.licenses="MIT"
 
 COPY --from=builder /kerbecs /kerbecs
 
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-ENV TZ=America/Los_Angeles
+ENV TZ=UTC
+EXPOSE 10310 10300
 
 ENTRYPOINT ["/kerbecs"]

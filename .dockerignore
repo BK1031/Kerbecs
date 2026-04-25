@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+Makefile
+README.md
+LICENSE.txt
+*.iml
+coverage.out
+coverage.html
+scripts
+examples
