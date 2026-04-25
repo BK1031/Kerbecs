@@ -28,15 +28,27 @@ func (h HandlerConfig) formattedGateway() string {
 
 func ProxyRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestID, _ := uuid.NewV7()
-		c.Set("Request-ID", requestID.String())
+		// Respect a Request-ID set by an upstream middleware (e.g. request_id);
+		// otherwise generate one as a fallback so every log line has it.
+		var requestID string
+		if v, ok := c.Get("Request-ID"); ok {
+			if s, _ := v.(string); s != "" {
+				requestID = s
+			}
+		}
+		if requestID == "" {
+			if v, _ := uuid.NewV7(); v != uuid.Nil {
+				requestID = v.String()
+			}
+			c.Set("Request-ID", requestID)
+			c.Request.Header.Set("Request-ID", requestID)
+		}
 		c.Set("Request-Start-Time", time.Now())
 		logger.SugarLogger.Infoln("-------------------------------------------------------------------")
 		logger.SugarLogger.Infoln(time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
-		logger.SugarLogger.Infoln("REQUEST ID: " + requestID.String())
+		logger.SugarLogger.Infoln("REQUEST ID: " + requestID)
 		logger.SugarLogger.Infoln("REQUEST ROUTE: " + c.Request.Host + c.Request.URL.String() + " [" + c.Request.Method + "]")
 		logger.SugarLogger.Infoln("REQUEST ORIGIN: " + c.ClientIP())
-		c.Request.Header.Set("Request-ID", requestID.String())
 		if strings.ToLower(c.GetHeader("Upgrade")) != "" {
 			logger.SugarLogger.Infoln("UPGRADE: " + c.GetHeader("Upgrade"))
 		}
@@ -91,6 +103,17 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 				"message": "No route configured for " + c.Request.Method + " " + c.Request.URL.String(),
 			})
 			return
+		}
+
+		// Route-level middleware chain. Each middleware runs as a pre-handler;
+		// if any aborts (e.g. auth rejects), short-circuit before proxying.
+		// Around-style behavior via c.Next() is not yet supported in route
+		// position — listener-level middlewares get full gin chain semantics.
+		for _, mw := range match.Route.Middlewares {
+			mw(c)
+			if c.IsAborted() {
+				return
+			}
 		}
 
 		up := match.Route.Upstream

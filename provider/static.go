@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"kerbecs/config"
+	"kerbecs/pkg/middleware"
 )
 
 // Defaults applied when neither global nor route limits are set.
@@ -17,7 +18,7 @@ type Static struct {
 	routes []Route
 }
 
-func NewStatic(f *config.File) (*Static, error) {
+func NewStatic(f *config.File, mws *middleware.Registry) (*Static, error) {
 	globalLimits := Limits{
 		MaxRequestBytes:  nonZeroInt64(f.Gateway.Limits.MaxRequestBytes.Bytes(), defaultMaxRequestBytes),
 		MaxResponseBytes: nonZeroInt64(f.Gateway.Limits.MaxResponseBytes.Bytes(), defaultMaxResponseBytes),
@@ -65,6 +66,10 @@ func NewStatic(f *config.File) (*Static, error) {
 		if r.Match.Path == "" {
 			return nil, fmt.Errorf("route %q: match.path is required", r.Name)
 		}
+		chain, err := mws.Chain(r.Middlewares)
+		if err != nil {
+			return nil, fmt.Errorf("route %q: %w", r.Name, err)
+		}
 		routes = append(routes, Route{
 			Name:        r.Name,
 			Match:       RouteMatch{Path: r.Match.Path, Methods: append([]string(nil), r.Match.Methods...), Host: r.Match.Host},
@@ -72,7 +77,7 @@ func NewStatic(f *config.File) (*Static, error) {
 			Rewrite:     convertRewrite(r.Rewrite),
 			Envelope:    env,
 			Limits:      mergeLimits(globalLimits, r.Limits),
-			Middlewares: append([]string(nil), r.Middlewares...),
+			Middlewares: chain,
 		})
 	}
 	return &Static{routes: routes}, nil
