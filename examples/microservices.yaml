@@ -1,0 +1,102 @@
+# Microservices fan-out: multiple services, each on its own URL prefix.
+# Incoming /users/123 -> http://users-svc/123 (prefix stripped at the gateway).
+
+gateway:
+  name: kerbecs-edge
+  version: 3.0.0
+  env: ${ENV:PROD}
+  limits:
+    max_request_bytes: 10MB
+    max_response_bytes: 10MB
+  timeouts:
+    dial: 2s
+    headers: 30s
+    idle: 50s        # tuned under AWS ALB's 60s default
+    overall: 30s     # global default; routes can override
+
+listeners:
+  gateway:
+    port: ${PORT:10310}
+    cors:
+      enabled: true
+      allowed_origins:
+        - https://app.example.com
+      allow_credentials: true
+  admin:
+    port: ${ADMIN_PORT:10300}
+    auth:
+      type: basic
+      username: ${KERBECS_USER}
+      password: ${KERBECS_PASSWORD}
+
+providers:
+  static: { watch: false }
+
+upstreams:
+  users-svc:
+    name: users
+    version: 1.4.2
+    instances:
+      - http://users-1:8080
+      - http://users-2:8080
+      - http://users-3:8080
+    load_balancer: round_robin
+
+  billing-svc:
+    name: billing
+    version: 0.9.0
+    instances:
+      - http://billing-1:8080
+      - http://billing-2:8080
+
+  search-svc:
+    name: search
+    version: 2.1.0
+    instances: [http://search:8080]
+    timeouts:
+      headers: 60s   # search has cold-cache slow paths
+
+  uploads-svc:
+    name: uploads
+    version: 1.0.0
+    instances: [http://uploads:8080]
+
+routes:
+  # GET/POST/etc on /users/* go to users-svc with /users/ stripped.
+  - name: users
+    match:
+      path: /users/*
+      methods: [GET, POST, PUT, PATCH, DELETE]
+    upstream: users-svc
+    rewrite:
+      strip_prefix: /users
+    envelope: default
+
+  - name: billing
+    match: { path: /billing/* }
+    upstream: billing-svc
+    rewrite: { strip_prefix: /billing }
+    envelope: default
+
+  # Search has a longer overall budget; the upstream's cold-cache search
+  # legitimately takes time before headers come back.
+  - name: search
+    match: { path: /search/* }
+    upstream: search-svc
+    rewrite: { strip_prefix: /search }
+    envelope: default
+    timeouts:
+      overall: 90s
+
+  # Uploads accept big bodies; override the global limit.
+  - name: uploads
+    match:
+      path: /uploads/*
+      methods: [POST, PUT]
+    upstream: uploads-svc
+    rewrite: { strip_prefix: /uploads }
+    envelope: passthrough
+    limits:
+      max_request_bytes: 500MB
+    timeouts:
+      overall: 0     # large uploads can take arbitrarily long

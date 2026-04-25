@@ -1,0 +1,78 @@
+# Streaming workloads: SSE, WebSocket, and large file downloads.
+#
+# Key patterns:
+#   - envelope: passthrough on streaming routes (or rely on auto-passthrough
+#     for SSE / application/grpc / binary content types)
+#   - overall: 0 to opt out of the per-request deadline so streams aren't cut
+#     short. WebSocket upgrades bypass the overall timeout automatically, so
+#     setting it explicitly is only required for SSE / downloads.
+#   - generous max_response_bytes (or no envelope at all, since passthrough
+#     is uncapped on the response side)
+
+gateway:
+  name: kerbecs-streaming
+  version: 3.0.0
+  timeouts:
+    dial: 5s
+    headers: 30s     # protect against hung upstreams that never send headers
+    overall: 0       # global default: no overall deadline
+
+listeners:
+  gateway: { port: "10310" }
+  admin:
+    port: "10300"
+    auth: { type: basic, username: ${KERBECS_USER}, password: ${KERBECS_PASSWORD} }
+
+providers:
+  static: { watch: false }
+
+upstreams:
+  events-service:
+    name: events
+    version: 1.0.0
+    instances:
+      - http://events-1:8080
+      - http://events-2:8080
+    load_balancer: round_robin
+
+  files-service:
+    name: files
+    version: 1.0.0
+    instances: [http://files:8080]
+    timeouts:
+      dial: 2s
+      headers: 10s   # files server might be slow to start
+      idle: 50s
+
+  realtime-service:
+    name: realtime
+    version: 1.0.0
+    instances: [ws://realtime:8080]
+
+routes:
+  # Server-Sent Events. Auto-passthrough kicks in once upstream returns
+  # text/event-stream, but envelope: passthrough is more honest about intent.
+  - name: events-sse
+    match: { path: /events/* }
+    upstream: events-service
+    envelope: passthrough
+    timeouts:
+      overall: 0     # explicit: don't cut the stream
+
+  # Large download endpoint. octet-stream / pdf / zip / csv content types
+  # auto-passthrough on envelope routes too, but explicit is clearer.
+  - name: file-downloads
+    match: { path: /downloads/* }
+    upstream: files-service
+    envelope: passthrough
+    timeouts:
+      overall: 0
+    limits:
+      max_request_bytes: 1KB    # small uploads expected; tight cap
+
+  # WebSocket upgrade. Auto-bypasses overall timeout based on the
+  # 'Upgrade: websocket' header, so no special config needed.
+  - name: realtime-ws
+    match: { path: /ws/* }
+    upstream: realtime-service
+    envelope: passthrough
