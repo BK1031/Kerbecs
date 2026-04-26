@@ -72,21 +72,25 @@ func ProxyResponseLogger() gin.HandlerFunc {
 	}
 }
 
-// NewProxyHandler returns a gin handler that resolves routes via the given
-// router and proxies matched requests to the route's upstream. If the matched
-// route has envelope: default, the upstream response is buffered and wrapped
-// in the Kerbecs envelope. passthrough routes stream unchanged.
+// NewProxyHandler returns a gin handler that resolves routes via the live
+// state pointer and proxies matched requests to the route's upstream. The
+// state is loaded once per request so each request sees a consistent view of
+// (router, transports) even across hot reloads.
+//
+// If the matched route has envelope: default, the upstream response is
+// buffered and wrapped in the Kerbecs envelope. passthrough routes stream
+// unchanged.
 //
 // Pre-match errors (no route found) are returned as plain JSON without an
 // envelope, since the envelope is a property of a matched route.
-func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
+func NewProxyHandler(cfg HandlerConfig, state *StatePointer) gin.HandlerFunc {
 	gateway := cfg.formattedGateway()
-	transports := buildTransportCache(rt)
 
 	return func(c *gin.Context) {
+		live := state.Load()
 		start := requestStart(c)
 
-		match := rt.Find(c.Request.Method, c.Request.Host, c.Request.URL.Path)
+		match := live.Router.Find(c.Request.Method, c.Request.Host, c.Request.URL.Path)
 		if match == nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"message": "No route configured for " + c.Request.Method + " " + c.Request.URL.String(),
@@ -135,7 +139,7 @@ func NewProxyHandler(cfg HandlerConfig, rt *router.Router) gin.HandlerFunc {
 		logger.SugarLogger.Infof("PROXY TO: %s @ %s%s", service, target.String(), c.Request.URL.Path)
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
-		if tr, ok := transports[up.Name]; ok {
+		if tr, ok := live.Transports[up.Name]; ok {
 			proxy.Transport = tr
 		}
 		if match.Route.Envelope == provider.EnvelopeDefault {

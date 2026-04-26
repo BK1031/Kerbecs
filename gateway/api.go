@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"kerbecs/config"
-	"kerbecs/router"
 	"kerbecs/pkg/logger"
 	"net/http"
 	"time"
@@ -26,11 +25,13 @@ type ListenerConfig struct {
 }
 
 // Serve starts the gateway HTTP listener and blocks until ctx is canceled, at
-// which point it drains in-flight requests up to shutdownTimeout.
-func Serve(ctx context.Context, listener ListenerConfig, handler HandlerConfig, rt *router.Router) error {
+// which point it drains in-flight requests up to shutdownTimeout. The state
+// pointer is read once per request, so atomic updates to the route table
+// (hot reload) are picked up without restarting the listener.
+func Serve(ctx context.Context, listener ListenerConfig, handler HandlerConfig, state *StatePointer) error {
 	srv := &http.Server{
 		Addr:    ":" + listener.Port,
-		Handler: SetupRouter(listener, handler, rt),
+		Handler: SetupRouter(listener, handler, state),
 	}
 
 	errCh := make(chan error, 1)
@@ -57,7 +58,7 @@ func Serve(ctx context.Context, listener ListenerConfig, handler HandlerConfig, 
 	}
 }
 
-func SetupRouter(listener ListenerConfig, handler HandlerConfig, rt *router.Router) *gin.Engine {
+func SetupRouter(listener ListenerConfig, handler HandlerConfig, state *StatePointer) *gin.Engine {
 	if listener.Env == "PROD" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -68,7 +69,7 @@ func SetupRouter(listener ListenerConfig, handler HandlerConfig, rt *router.Rout
 	r.Use(ProxyRequestLogger())
 	r.Use(ProxyAuthMiddleware())
 	r.Use(ProxyResponseLogger())
-	r.Any("/*path", NewProxyHandler(handler, rt))
+	r.Any("/*path", NewProxyHandler(handler, state))
 	return r
 }
 

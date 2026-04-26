@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"kerbecs/provider"
-	"kerbecs/router"
 	"net"
 	"net/http"
 	"time"
@@ -16,17 +15,6 @@ const (
 	defaultHeadersTimeout = 30 * time.Second
 	defaultIdleConnTimeout = 90 * time.Second
 )
-
-// buildTransportCache returns a map from upstream name to a dedicated
-// *http.Transport, so each upstream gets its own connection pool and timeout
-// profile.
-func buildTransportCache(rt *router.Router) map[string]*http.Transport {
-	out := map[string]*http.Transport{}
-	for _, up := range rt.Upstreams() {
-		out[up.Name] = buildTransport(up.Timeouts)
-	}
-	return out
-}
 
 func buildTransport(t provider.Timeouts) *http.Transport {
 	dialer := &net.Dialer{
