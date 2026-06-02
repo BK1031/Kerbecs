@@ -59,15 +59,20 @@ func main() {
 	defer cancel()
 
 	// Optional config-file watcher: when providers.static.watch is true,
-	// re-read the YAML on changes and atomically swap the live state.
+	// re-read the YAML on changes and atomically swap the live state. The
+	// reload mechanism (file events vs polling) is selected by providers.static.
 	if file.Providers.Static.Watch {
-		w := config.NewWatcher(path, func() { reload(path, statePtr) })
+		w := config.NewConfigWatcher(file.Providers.Static, path, func() { reload(path, statePtr) })
 		go func() {
 			if err := w.Start(ctx); err != nil {
 				logger.SugarLogger.Errorf("config watcher: %v", err)
 			}
 		}()
-		logger.SugarLogger.Infof("watching %s for changes", path)
+		if file.Providers.Static.WatchMode == config.WatchModePoll {
+			logger.SugarLogger.Infof("watching %s for changes (poll, every %s)", path, file.Providers.Static.WatchInterval.AsDuration())
+		} else {
+			logger.SugarLogger.Infof("watching %s for changes (file events)", path)
+		}
 	}
 
 	var eg errgroup.Group
