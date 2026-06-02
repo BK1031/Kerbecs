@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 // ApplyDefaults fills in unset fields on a parsed File with the values the
 // gateway needs in order to boot. It returns a list of human-readable warnings
 // for defaults that represent security-relevant fallbacks (e.g. admin
@@ -26,6 +28,22 @@ func ApplyDefaults(f *File) []string {
 	if f.Listeners.Admin.Auth.Password == "" {
 		f.Listeners.Admin.Auth.Password = "admin"
 		warnings = append(warnings, "admin password not set in config; defaulting to \"admin\" — DO NOT USE IN PRODUCTION")
+	}
+
+	if f.Providers.Static.Watch {
+		switch f.Providers.Static.WatchMode {
+		case "", WatchModeFile:
+			f.Providers.Static.WatchMode = WatchModeFile
+		case WatchModePoll:
+			if f.Providers.Static.WatchInterval.AsDuration() <= 0 {
+				f.Providers.Static.WatchInterval = Duration(defaultPollInterval)
+			}
+		default:
+			warnings = append(warnings, fmt.Sprintf(
+				"unknown providers.static.watch_mode %q; falling back to %q",
+				f.Providers.Static.WatchMode, WatchModeFile))
+			f.Providers.Static.WatchMode = WatchModeFile
+		}
 	}
 
 	return warnings

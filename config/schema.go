@@ -43,7 +43,7 @@ type ListenersSection struct {
 }
 
 type GatewayListener struct {
-	Port string     `yaml:"port"`
+	Port string      `yaml:"port"`
 	CORS *CORSConfig `yaml:"cors,omitempty"`
 }
 
@@ -74,8 +74,29 @@ type ProvidersSection struct {
 	// Rincon and other providers added in later phases.
 }
 
+// Watch reload mechanisms for the static provider.
+const (
+	// WatchModeFile reloads via filesystem events (fsnotify). Low latency,
+	// but depends on inotify/kqueue delivering events for the config path —
+	// which not every filesystem does (some network and overlay mounts, and
+	// certain container volume drivers, never fire events).
+	WatchModeFile = "file"
+	// WatchModePoll reloads by stat-ing the config file on a fixed interval.
+	// Higher latency and a small constant cost, but works anywhere os.Stat
+	// does — the reliable choice when file events aren't delivered.
+	WatchModePoll = "poll"
+)
+
 type StaticProviderConfig struct {
+	// Watch enables hot-reloading the config file. When false the config is
+	// read once at startup and a restart is required to pick up changes.
 	Watch bool `yaml:"watch"`
+	// WatchMode selects the reload mechanism: "file" (default, fsnotify) or
+	// "poll". Ignored when Watch is false.
+	WatchMode string `yaml:"watch_mode,omitempty"`
+	// WatchInterval is the poll period for WatchModePoll. Defaults to 5s.
+	// Ignored for WatchModeFile.
+	WatchInterval Duration `yaml:"watch_interval,omitempty"`
 }
 
 type Upstream struct {
@@ -148,11 +169,11 @@ type ObservabilitySection struct {
 }
 
 type LoggingConfig struct {
-	Level            string   `yaml:"level"`
-	Format           string   `yaml:"format"`
-	AccessLog        bool     `yaml:"access_log"`
-	RedactHeaders    []string `yaml:"redact_headers,omitempty"`
-	MaxBodyLogBytes  int      `yaml:"max_body_log_bytes,omitempty"`
+	Level           string   `yaml:"level"`
+	Format          string   `yaml:"format"`
+	AccessLog       bool     `yaml:"access_log"`
+	RedactHeaders   []string `yaml:"redact_headers,omitempty"`
+	MaxBodyLogBytes int      `yaml:"max_body_log_bytes,omitempty"`
 }
 
 type MetricsConfig struct {

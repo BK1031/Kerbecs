@@ -247,6 +247,42 @@ All other "well-known" names (`PORT`, `ADMIN_PORT`, `KERBECS_USER`,
 `${VAR:default}` expansions. They have no effect unless the YAML you load
 actually references them.
 
+## Configuration reloading
+
+With `providers.static.watch: true`, Kerbecs reloads the config file on change
+and atomically swaps the live routing state — no restart, no dropped
+connections. If the new file fails to parse or build, the previous config stays
+in place and the error is logged, so a bad edit never takes the gateway down.
+When `watch` is `false` (the default), the config is read once at startup.
+
+Two reload mechanisms are available via `watch_mode`:
+
+| `watch_mode`     | How it detects changes                          | When to use it |
+|------------------|-------------------------------------------------|----------------|
+| `file` (default) | Filesystem events (`fsnotify`, inotify/kqueue). | Local files and most volume mounts. Lowest latency. |
+| `poll`           | Stats the file every `watch_interval`.          | When file events aren't delivered for the config path — some network/overlay mounts and container volume drivers never fire them. |
+
+```yaml
+providers:
+  static:
+    watch: true
+    watch_mode: file        # "file" (default) or "poll"
+
+# or, to poll instead of relying on filesystem events:
+providers:
+  static:
+    watch: true
+    watch_mode: poll
+    watch_interval: 5s      # poll period; defaults to 5s
+```
+
+Both modes are Kubernetes ConfigMap–aware: a ConfigMap update swaps the mounted
+`..data` symlink, which `file` mode observes as a directory event and `poll`
+mode detects as a change in the resolved symlink target. (This requires a
+whole-directory ConfigMap mount, not a `subPath` mount — `subPath` volumes
+don't receive updates.) An unknown `watch_mode` logs a warning and falls back
+to `file`.
+
 ## Current capabilities
 
 - HTTP/1.1 ingress; HTTP/2 upstream negotiation via `ForceAttemptHTTP2`
@@ -260,6 +296,7 @@ actually references them.
 - First-match routing with exact / prefix / regex path patterns
 - Per-route byte caps for requests and responses
 - Per-listener CORS (allowlist or wildcard, off by default)
+- Hot config reload via file events or polling, with atomic state swap
 - Graceful shutdown with in-flight drain
 - Constant-time admin auth
 
@@ -269,7 +306,6 @@ actually references them.
   JWT, rate limiting, and per-route policy are blocked on this.
 - **Active health checks.** `health_check` config is parsed but unused; dead
   instances stay in load-balancer rotation.
-- **Hot reload on config change.** Restart required.
 - **Prometheus metrics and OpenTelemetry tracing.**
 - **TLS termination** on the listener. Run behind a TLS-terminating LB.
 - **Non-static providers** (service registry, Docker labels, Kubernetes

@@ -27,7 +27,13 @@ listeners:
 
 providers:
   static:
+    # Hot-reload the config on change. When false (default), config is read
+    # once at startup. See the "Configuration reloading" section in the README.
     watch: false
+    # Reload mechanism when watch is true: "file" (default, fsnotify) or
+    # "poll". Use "poll" where filesystem events aren't delivered.
+    # watch_mode: poll
+    # watch_interval: 5s   # poll period (poll mode only); defaults to 5s
 
 upstreams:
   users-service:

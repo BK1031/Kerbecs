@@ -14,6 +14,24 @@ import (
 // single logical save (write + rename + chmod), so we coalesce them.
 const debounce = 100 * time.Millisecond
 
+// FileWatcher invokes a callback when the config file changes, until its
+// context is canceled. Both the fsnotify-backed Watcher and the interval-based
+// PollWatcher implement it.
+type FileWatcher interface {
+	Start(ctx context.Context) error
+}
+
+// NewConfigWatcher builds the FileWatcher selected by the static provider
+// config — fsnotify file events (WatchModeFile, the default) or interval
+// polling (WatchModePoll). Mode and interval defaults are applied by
+// ApplyDefaults, so cfg is expected to be normalized here.
+func NewConfigWatcher(cfg StaticProviderConfig, path string, onChange func()) FileWatcher {
+	if cfg.WatchMode == WatchModePoll {
+		return NewPollWatcher(path, cfg.WatchInterval.AsDuration(), onChange)
+	}
+	return NewWatcher(path, onChange)
+}
+
 // Watcher invokes onChange whenever the config file at path is modified.
 //
 // We watch the parent directory rather than the file itself so editor
