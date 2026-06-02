@@ -2,7 +2,7 @@ package config
 
 const (
 	Name    = "Kerbecs"
-	Version = "3.1.0"
+	Version = "3.1.1"
 )
 
 func FormattedNameWithVersion() string {
