@@ -28,10 +28,12 @@ type Config struct {
 }
 
 // Serve starts the admin HTTP listener and blocks until ctx is canceled, at
-// which point it drains in-flight requests up to shutdownTimeout.
-func Serve(ctx context.Context, cfg Config) error {
+// which point it drains in-flight requests up to shutdownTimeout. currentRouter
+// returns the live router so the registry endpoints reflect the latest config
+// after a hot reload.
+func Serve(ctx context.Context, cfg Config, currentRouter RouterFunc) error {
 	engine := SetupRouter(cfg)
-	InitializeRoutes(engine)
+	InitializeRoutes(engine, cfg, currentRouter)
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: engine,
@@ -73,9 +75,13 @@ func SetupRouter(cfg Config) *gin.Engine {
 	return r
 }
 
-func InitializeRoutes(router *gin.Engine) {
+func InitializeRoutes(router *gin.Engine, cfg Config, currentRouter RouterFunc) {
 	gw := router.Group("/admin-gw", func(c *gin.Context) {})
 	gw.GET("/ping", Ping)
+	gw.GET("/resolve", Resolve(currentRouter))
+	gw.GET("/routes", Routes(currentRouter))
+	gw.GET("/upstreams", Upstreams(currentRouter))
+	gw.GET("/info", Info(cfg.Env, currentRouter))
 }
 
 func AuthMiddleware(username, password string) gin.HandlerFunc {

@@ -60,6 +60,16 @@ func (r *Router) Upstreams() []*provider.Upstream {
 	return out
 }
 
+// Routes returns the matched routes in precedence order (first match wins).
+// Used by the admin API to expose the live route table.
+func (r *Router) Routes() []*provider.Route {
+	out := make([]*provider.Route, 0, len(r.routes))
+	for _, c := range r.routes {
+		out = append(out, c.route)
+	}
+	return out
+}
+
 // Find returns the first matching route, or nil if none matches.
 func (r *Router) Find(method, host, path string) *Match {
 	for _, c := range r.routes {
