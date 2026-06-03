@@ -229,8 +229,26 @@ completion.
 A separate HTTP listener (default `:10300`) exposes Kerbecs's own endpoints.
 Basic auth is enforced for everything except `/admin-gw/ping`, and credentials
 are compared in constant time. Configure via `listeners.admin` in the YAML.
-The only built-in endpoint today is the health ping; richer admin actions
-(drain, route inspection, log-level toggle) are future work.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /admin-gw/ping` | Liveness probe (no auth). |
+| `GET /admin-gw/resolve?path=&method=&host=` | Run the live router against `path` and return the matched upstream URL, its instances, and the rewritten path — the same decision the gateway makes. `method` defaults to `GET`. |
+| `GET /admin-gw/routes` | The live route table in precedence order (name, path, methods, host, upstream, rewrite). |
+| `GET /admin-gw/upstreams` | The distinct upstreams and their instance pools — a service-registry view. |
+| `GET /admin-gw/info` | Gateway name, version, env, and live route/upstream counts. |
+
+`resolve` lets in-cluster services treat the gateway as a service registry:
+ask "who serves `/api/core/...`?", get back the upstream URL and the path to
+send, and call it directly — no separate registry needed. All registry
+endpoints read the live router, so they reflect config hot reloads. Example:
+
+```console
+$ curl -su admin:admin '127.0.0.1:10300/admin-gw/resolve?path=/api/core/ping'
+{"matched":true,"route":"core-internal","upstream":"core",
+ "url":"http://core:9999","instances":["http://core:9999"],
+ "rewritten_path":"/core/ping"}
+```
 
 ## Environment variables
 

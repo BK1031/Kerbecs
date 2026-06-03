@@ -75,8 +75,17 @@ func main() {
 		}
 	}
 
+	// Admin registry endpoints read the live router so they reflect hot reloads.
+	currentRouter := func() *router.Router {
+		s := statePtr.Load()
+		if s == nil {
+			return nil
+		}
+		return s.Router
+	}
+
 	var eg errgroup.Group
-	eg.Go(func() error { return admin.Serve(ctx, adminCfg) })
+	eg.Go(func() error { return admin.Serve(ctx, adminCfg, currentRouter) })
 	eg.Go(func() error { return gateway.Serve(ctx, listenerCfg, handlerCfg, statePtr) })
 
 	if err := eg.Wait(); err != nil {
